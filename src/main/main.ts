@@ -128,6 +128,22 @@ ipcMain.handle('secure-wipe:find-binary', async () => {
   }
 });
 
+ipcMain.handle('secure-wipe:get-system-info', async () => {
+  try {
+    const systemInfo = await secureWipeService.getSystemInfo();
+    return {
+      success: true,
+      systemInfo,
+    };
+  } catch (error) {
+    console.error('Get system info error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+});
+
 if (process.env.NODE_ENV === 'production') {
   const sourceMapSupport = require('source-map-support');
   sourceMapSupport.install();

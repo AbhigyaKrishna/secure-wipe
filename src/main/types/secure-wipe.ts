@@ -95,6 +95,37 @@ export interface DriveListEvent extends BaseEvent {
   drives: DriveInfo[];
 }
 
+// CPU information structure
+export interface CpuInfo {
+  logical_cores: number;
+  physical_cores: number;
+  model_name: string;
+  frequency_mhz: number;
+}
+
+// Storage device information structure
+export interface StorageDevice {
+  name: string;
+  device_path: string;
+  size_bytes: number;
+  device_type: string;
+  mount_point: string;
+  file_system: string;
+}
+
+// System information structure
+export interface SystemInfo {
+  os_name: string;
+  os_version: string;
+  architecture: string;
+  hostname: string;
+  username: string;
+  total_memory_bytes: number;
+  available_memory_bytes: number;
+  cpu_info: CpuInfo;
+  storage_devices: StorageDevice[];
+}
+
 // Union type for all possible events
 export type SecureWipeEvent =
   | StartEvent
@@ -112,10 +143,10 @@ export type SecureWipeEvent =
 export interface SecureWipeConfig {
   target: string;
   algorithm: WipeAlgorithm;
-  force?: boolean;
   bufferSize?: number; // in KB
   demo?: boolean;
   demoSize?: number; // in MB
+  passes?: number; // Custom number of passes (overrides algorithm default)
 }
 
 // Result of a secure wipe operation

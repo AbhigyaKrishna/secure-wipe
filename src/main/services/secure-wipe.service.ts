@@ -15,6 +15,7 @@ import {
   ProgressCallback,
   WipeAlgorithm,
   DriveInfo,
+  SystemInfo,
 } from '../types/secure-wipe';
 import { SecureWipeUtils } from '../utils/secure-wipe.utils';
 
@@ -139,64 +140,115 @@ export class SecureWipeService extends EventEmitter {
   }
 
   /**
+   * Validate pattern format
+   */
+  private validatePattern(pattern: string): boolean {
+    // Allow "random" as a special pattern
+    if (pattern.toLowerCase() === 'random') {
+      return true;
+    }
+
+    // Validate hex pattern (0x00, 0xFF, etc.)
+    const hexPattern = /^0x[0-9A-Fa-f]{2}$/;
+    if (hexPattern.test(pattern)) {
+      return true;
+    }
+
+    // Allow simple hex without 0x prefix
+    const simpleHexPattern = /^[0-9A-Fa-f]{2}$/;
+    if (simpleHexPattern.test(pattern)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
    * Build command arguments for the secure-wipe binary
    */
-  private buildArgs(config: SecureWipeConfig, listDrives = false): string[] {
+  private buildArgs(
+    config: SecureWipeConfig,
+    listDrives = false,
+    systemInfo = false,
+  ): string[] {
     const args: string[] = ['--json'];
 
+    // Handle simple utility commands
     if (listDrives) {
       args.push('--list-drives');
       return args;
     }
 
-    // Validate inputs
-    if (!this.validatePath(config.target)) {
-      throw new Error(`Invalid target path: ${config.target}`);
+    if (systemInfo) {
+      args.push('--system-info');
+      return args;
     }
 
+    // Validate and add core arguments based on mode
+    this.addCoreArguments(args, config);
+
+    // Add common optional arguments
+    this.addOptionalArguments(args, config);
+
+    return args;
+  }
+
+  /**
+   * Add core arguments (target/demo and algorithm)
+   */
+  private addCoreArguments(args: string[], config: SecureWipeConfig): void {
+    args.push('--force');
+    // Validate algorithm for all modes
     if (!this.validateAlgorithm(config.algorithm)) {
       throw new Error(`Invalid algorithm: ${config.algorithm}`);
     }
-
-    args.push('--target', config.target);
     args.push('--algorithm', config.algorithm);
 
-    if (config.force) {
-      args.push('--force');
-    }
+    if (config.demo) {
+      args.push('--demo');
 
+      if (config.demoSize) {
+        const validation = SecureWipeUtils.validateDemoSize(config.demoSize);
+        if (!validation.valid) {
+          throw new Error(`Invalid demo size: ${validation.error}`);
+        }
+        args.push('--demo-size', config.demoSize.toString());
+      }
+    } else {
+      // Non-demo mode requires target validation
+      if (!this.validatePath(config.target)) {
+        throw new Error(`Invalid target path: ${config.target}`);
+      }
+      args.push('--target', config.target);
+    }
+  }
+
+  /**
+   * Add optional arguments that apply to both demo and regular modes
+   */
+  private addOptionalArguments(args: string[], config: SecureWipeConfig): void {
     if (config.bufferSize) {
-      const bufferValidation = SecureWipeUtils.validateBufferSize(
-        config.bufferSize,
-      );
-      if (!bufferValidation.valid) {
-        throw new Error(`Invalid buffer size: ${bufferValidation.error}`);
+      const validation = SecureWipeUtils.validateBufferSize(config.bufferSize);
+      if (!validation.valid) {
+        throw new Error(`Invalid buffer size: ${validation.error}`);
       }
       args.push('--buffer-size', config.bufferSize.toString());
     }
 
-    if (config.demo) {
-      args.push('--demo');
-      if (config.demoSize) {
-        const demoSizeValidation = SecureWipeUtils.validateDemoSize(
-          config.demoSize,
-        );
-        if (!demoSizeValidation.valid) {
-          throw new Error(`Invalid demo size: ${demoSizeValidation.error}`);
-        }
-        args.push('--demo-size', config.demoSize.toString());
+    if (config.passes) {
+      if (config.passes < 1 || config.passes > 100) {
+        throw new Error('Number of passes must be between 1 and 100');
       }
+      args.push('--passes', config.passes.toString());
     }
-
-    return args;
   }
 
   /**
    * Parse JSON events from accumulated buffer
    * Handles both single-line and multi-line JSON output
    */
-  private parseEvents(data: string): SecureWipeEvent[] {
-    const events: SecureWipeEvent[] = [];
+  private parseEvents(data: string): (SecureWipeEvent | SystemInfo)[] {
+    const events: (SecureWipeEvent | SystemInfo)[] = [];
     this.jsonBuffer += data;
 
     // Try to extract complete JSON objects from the buffer
@@ -253,12 +305,20 @@ export class SecureWipeService extends EventEmitter {
   /**
    * Parse a single JSON event
    */
-  private parseEvent(jsonStr: string): SecureWipeEvent | null {
+  private parseEvent(jsonStr: string): SecureWipeEvent | SystemInfo | null {
     try {
       const trimmed = jsonStr.trim();
       if (!trimmed) return null;
 
-      return JSON.parse(trimmed) as SecureWipeEvent;
+      const parsed = JSON.parse(trimmed);
+
+      // Check if it's a SystemInfo response (has os_name, os_version, architecture)
+      if (parsed.os_name && parsed.os_version && parsed.architecture) {
+        return parsed as SystemInfo;
+      }
+
+      // Otherwise, it's a regular event
+      return parsed as SecureWipeEvent;
     } catch (error) {
       console.warn(
         'Failed to parse JSON event:',
@@ -296,20 +356,24 @@ export class SecureWipeService extends EventEmitter {
           const parsedEvents = this.parseEvents(data.toString());
 
           for (const event of parsedEvents) {
-            events.push(event);
+            // Only handle SecureWipeEvent types, not SystemInfo
+            if ('type' in event) {
+              const wipeEvent = event as SecureWipeEvent;
+              events.push(wipeEvent);
 
-            // Emit to service event emitter
-            this.emit('event', event);
+              // Emit to service event emitter
+              this.emit('event', wipeEvent);
 
-            // Call progress callback if provided
-            if (onProgress) {
-              onProgress(event);
-            }
+              // Call progress callback if provided
+              if (onProgress) {
+                onProgress(wipeEvent);
+              }
 
-            // Check for errors
-            if (event.type === 'error') {
-              hasError = true;
-              errorMessage = event.message;
+              // Check for errors
+              if (wipeEvent.type === 'error') {
+                hasError = true;
+                errorMessage = wipeEvent.message;
+              }
             }
           }
         });
@@ -383,10 +447,10 @@ export class SecureWipeService extends EventEmitter {
           const parsedEvents = this.parseEvents(data.toString());
 
           for (const event of parsedEvents) {
-            if (event.type === 'drive_list') {
-              drives = event.drives;
-            } else if (event.type === 'error') {
-              errorMessage = event.message;
+            if ('type' in event && event.type === 'drive_list') {
+              drives = (event as any).drives;
+            } else if ('type' in event && event.type === 'error') {
+              errorMessage = (event as any).message;
             }
           }
         });
@@ -424,6 +488,96 @@ export class SecureWipeService extends EventEmitter {
             this.activeProcess.kill('SIGTERM');
             reject(
               new Error(`Drive listing timed out after ${this.timeout}ms`),
+            );
+          }
+        }, this.timeout);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  /**
+   * Get system information
+   */
+  async getSystemInfo(): Promise<SystemInfo> {
+    return new Promise((resolve, reject) => {
+      try {
+        const args = this.buildArgs(
+          { target: '', algorithm: 'random' },
+          false,
+          true,
+        );
+        console.log(
+          `Getting system info: ${this.binaryPath} ${args.join(' ')}`,
+        );
+
+        this.activeProcess = spawn(this.binaryPath, args, {
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+
+        let systemInfo: SystemInfo | null = null;
+        let errorMessage = '';
+
+        // Handle stdout
+        this.activeProcess.stdout?.on('data', (data: Buffer) => {
+          const parsedEvents = this.parseEvents(data.toString());
+
+          for (const event of parsedEvents) {
+            // Check if the event is SystemInfo (it should be the direct JSON response)
+            if (
+              typeof event === 'object' &&
+              event !== null &&
+              'os_name' in event &&
+              'os_version' in event &&
+              'architecture' in event
+            ) {
+              systemInfo = event as SystemInfo;
+            } else if ('type' in event && event.type === 'error') {
+              errorMessage = (event as any).message;
+            }
+          }
+        });
+
+        // Handle stderr
+        this.activeProcess.stderr?.on('data', (data: Buffer) => {
+          const message = data.toString().trim();
+          if (message) {
+            errorMessage += (errorMessage ? '\n' : '') + message;
+          }
+        });
+
+        // Handle completion
+        this.activeProcess.on('close', (code: number | null) => {
+          this.cleanup();
+
+          if (code === 0 && systemInfo) {
+            resolve(systemInfo);
+          } else {
+            reject(
+              new Error(
+                errorMessage || systemInfo === null
+                  ? 'No system info received'
+                  : `Process exited with code ${code}`,
+              ),
+            );
+          }
+        });
+
+        // Handle errors
+        this.activeProcess.on('error', (error: Error) => {
+          this.cleanup();
+          reject(new Error(`Failed to start process: ${error.message}`));
+        });
+
+        // Set up timeout
+        this.timeoutHandle = setTimeout(() => {
+          if (this.activeProcess) {
+            this.activeProcess.kill('SIGTERM');
+            reject(
+              new Error(
+                `System info request timed out after ${this.timeout}ms`,
+              ),
             );
           }
         }, this.timeout);

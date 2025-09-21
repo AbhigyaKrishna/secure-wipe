@@ -25,6 +25,7 @@ const electronHandler = {
   secureWipe: {
     wipe: (config: any) => ipcRenderer.invoke('secure-wipe:wipe', config),
     listDrives: () => ipcRenderer.invoke('secure-wipe:list-drives'),
+    getSystemInfo: () => ipcRenderer.invoke('secure-wipe:get-system-info'),
     cancel: () => ipcRenderer.invoke('secure-wipe:cancel'),
     checkBinary: () => ipcRenderer.invoke('secure-wipe:check-binary'),
     findBinary: () => ipcRenderer.invoke('secure-wipe:find-binary'),
