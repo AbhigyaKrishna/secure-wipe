@@ -23,7 +23,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading, error 
       <div className="auth-card">
         <div className="auth-header">
           <div className="auth-logo">
-            <span className="logo-icon">🔐</span>
+            <div className="logo-background">
+              <span className="logo-icon">🛡️</span>
+            </div>
           </div>
           <h1 className="auth-title">Welcome to SecureWipe</h1>
           <p className="auth-subtitle">
@@ -35,34 +37,40 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading, error 
           {error && (
             <div className="error-message">
               <span className="error-icon">⚠️</span>
-              {error}
+              <span className="error-text">{error}</span>
             </div>
           )}
 
           <div className="form-group">
             <label className="form-label">Email Address</label>
-            <input
-              type="email"
-              className="form-input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email"
-              required
-              disabled={isLoading}
-            />
+            <div className="input-container">
+              <span className="input-icon">📧</span>
+              <input
+                type="email"
+                className="form-input with-icon"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email address"
+                required
+                disabled={isLoading}
+              />
+            </div>
           </div>
 
           <div className="form-group">
             <label className="form-label">Password</label>
-            <input
-              type="password"
-              className="form-input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your password"
-              required
-              disabled={isLoading}
-            />
+            <div className="input-container">
+              <span className="input-icon">🔒</span>
+              <input
+                type="password"
+                className="form-input with-icon"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                required
+                disabled={isLoading}
+              />
+            </div>
           </div>
 
           <button
@@ -73,18 +81,19 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading, error 
             {isLoading ? (
               <>
                 <span className="loading-spinner"></span>
-                Signing In...
+                <span>Signing In...</span>
               </>
             ) : (
               <>
-                <span className="button-icon">🚀</span>
-                Sign In
+                <span className="button-icon">→</span>
+                <span>Sign In</span>
               </>
             )}
           </button>
         </form>
 
         <div className="auth-footer">
+          <div className="footer-divider"></div>
           <p className="footer-text">
             Secure authentication powered by{' '}
             <a 

@@ -30,18 +30,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Check authentication status on mount
   useEffect(() => {
     const checkAuthStatus = () => {
-      const authenticated = authService.isAuthenticated();
-      const email = authService.getUserEmail();
-      const needsVerif = authenticated && authService.needsVerification();
-
-      setIsAuthenticated(authenticated);
-      setNeedsVerification(needsVerif);
-      setUserEmail(email);
-
-      // If authenticated but needs verification, set verification state
-      if (authenticated && needsVerif) {
-        setNeedsVerification(true);
-      }
+      // Clear any existing auth data to start fresh
+      authService.logout();
+      
+      setIsAuthenticated(false);
+      setUserEmail(null);
+      setNeedsVerification(false);
     };
 
     checkAuthStatus();
