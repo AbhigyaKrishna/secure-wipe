@@ -180,7 +180,7 @@ export class SecureWipeService extends EventEmitter {
     }
 
     if (systemInfo) {
-      args.push('--system-info');
+      args.push('-s');
       return args;
     }
 
@@ -310,14 +310,18 @@ export class SecureWipeService extends EventEmitter {
       const trimmed = jsonStr.trim();
       if (!trimmed) return null;
 
+      console.log('Parsing JSON string:', trimmed);
       const parsed = JSON.parse(trimmed);
+      console.log('Parsed JSON object:', parsed);
 
       // Check if it's a SystemInfo response (has os_name, os_version, architecture)
       if (parsed.os_name && parsed.os_version && parsed.architecture) {
+        console.log('Identified as SystemInfo');
         return parsed as SystemInfo;
       }
 
       // Otherwise, it's a regular event
+      console.log('Identified as SecureWipeEvent');
       return parsed as SecureWipeEvent;
     } catch (error) {
       console.warn(
@@ -521,7 +525,11 @@ export class SecureWipeService extends EventEmitter {
 
         // Handle stdout
         this.activeProcess.stdout?.on('data', (data: Buffer) => {
-          const parsedEvents = this.parseEvents(data.toString());
+          const rawData = data.toString();
+          console.log('Raw system info data:', rawData);
+          
+          const parsedEvents = this.parseEvents(rawData);
+          console.log('Parsed events:', parsedEvents);
 
           for (const event of parsedEvents) {
             // Check if the event is SystemInfo (it should be the direct JSON response)
@@ -532,6 +540,7 @@ export class SecureWipeService extends EventEmitter {
               'os_version' in event &&
               'architecture' in event
             ) {
+              console.log('Found system info:', event);
               systemInfo = event as SystemInfo;
             } else if ('type' in event && event.type === 'error') {
               errorMessage = (event as any).message;
