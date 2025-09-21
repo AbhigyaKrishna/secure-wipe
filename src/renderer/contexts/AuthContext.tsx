@@ -30,12 +30,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Check authentication status on mount
   useEffect(() => {
     const checkAuthStatus = () => {
-      // Clear any existing auth data to start fresh
-      authService.logout();
+      const authenticated = authService.isAuthenticated();
+      const email = authService.getUserEmail();
       
-      setIsAuthenticated(false);
-      setUserEmail(null);
-      setNeedsVerification(false);
+      if (authenticated) {
+        // User is authenticated, check if they need verification
+        setIsAuthenticated(true);
+        setUserEmail(email);
+        setNeedsVerification(authService.needsVerification());
+      } else {
+        // User is not authenticated, show login page
+        setIsAuthenticated(false);
+        setUserEmail(null);
+        setNeedsVerification(false);
+      }
     };
 
     checkAuthStatus();
@@ -54,6 +62,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsAuthenticated(true);
       setNeedsVerification(true); // Always require verification after login
       setUserEmail(email);
+      // Clear any previous verification status since this is a new login
+      localStorage.removeItem('secureWipe_verification_completed');
     } catch (err) {
       const errorMessage = (err as any)?.message || 'Login failed. Please try again.';
       setError(errorMessage);
@@ -71,6 +81,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     try {
       await authService.verifyDigiLocker(verificationCode);
+      // Mark verification as completed so user won't need to verify again
+      authService.markVerificationCompleted();
       setNeedsVerification(false);
       // Keep authenticated state and user email
     } catch (err) {

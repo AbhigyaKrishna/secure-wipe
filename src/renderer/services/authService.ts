@@ -55,6 +55,7 @@ class AuthService {
     try {
       localStorage.removeItem('secureWipe_token');
       localStorage.removeItem('secureWipe_email');
+      localStorage.removeItem('secureWipe_verification_completed');
       this.token = null;
       this.userEmail = null;
     } catch (error) {
@@ -146,9 +147,26 @@ class AuthService {
 
   // Method to check if user needs verification
   needsVerification(): boolean {
-    // For now, we'll assume verification is always needed after login
-    // You can modify this logic based on your backend implementation
-    return this.isAuthenticated();
+    // Only need verification if we have a token but haven't completed verification yet
+    // We'll store verification status in localStorage
+    if (!this.isAuthenticated()) return false;
+    
+    try {
+      const verificationCompleted = localStorage.getItem('secureWipe_verification_completed');
+      return verificationCompleted !== 'true';
+    } catch (error) {
+      console.warn('Failed to check verification status:', error);
+      return true; // Default to needing verification if we can't check
+    }
+  }
+
+  // Mark verification as completed
+  markVerificationCompleted(): void {
+    try {
+      localStorage.setItem('secureWipe_verification_completed', 'true');
+    } catch (error) {
+      console.warn('Failed to save verification status:', error);
+    }
   }
 }
 
