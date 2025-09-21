@@ -264,41 +264,71 @@ export const SecureWipeDemo: React.FC = () => {
   };
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'monospace' }}>
-      <h2>Secure Wipe Service Demo</h2>
+    <div className="app-container fade-in">
+      <div className="app-header">
+        <h1 className="app-title">Secure Wipe Demo</h1>
+        <p className="app-subtitle">
+          Professional data sanitization and secure file wiping demonstration
+        </p>
+      </div>
 
-      {/* Binary Status */}
-      <div
-        style={{
-          marginBottom: '20px',
-          padding: '10px',
-          backgroundColor: '#f0f0f0',
-          borderRadius: '5px',
-        }}
-      >
-        <h3>Binary Status</h3>
+      {/* Binary Status Card */}
+      <div className="card">
+        <div className="card-header">
+          <span className="card-icon">🔧</span>
+          <h3 className="card-title">Binary Status</h3>
+        </div>
         {binaryStatus ? (
           <div>
-            <p>
-              Status:{' '}
-              {binaryStatus.binaryStatus?.exists ? '✅ Found' : '❌ Not Found'}
-              {binaryStatus.binaryStatus?.isExecutable === false &&
-                ' (Not Executable)'}
-            </p>
-            <p>Path: {binaryStatus.binaryStatus?.path}</p>
-            <p>Platform: {binaryStatus.platform}</p>
-            <p>Supported: {binaryStatus.supportedPlatforms?.join(', ')}</p>
+            <div style={{ marginBottom: '16px' }}>
+              <span className={`status-indicator ${
+                binaryStatus.binaryStatus?.exists 
+                  ? 'status-success' 
+                  : 'status-error'
+              }`}>
+                {binaryStatus.binaryStatus?.exists ? '✅' : '❌'}
+                {binaryStatus.binaryStatus?.exists ? 'Binary Found' : 'Binary Not Found'}
+                {binaryStatus.binaryStatus?.isExecutable === false && ' (Not Executable)'}
+              </span>
+            </div>
+            <div className="form-group">
+              <div className="form-label">Binary Path</div>
+              <div style={{ 
+                fontFamily: 'Monaco, Menlo, monospace', 
+                fontSize: '13px', 
+                color: '#64748b',
+                padding: '8px 12px',
+                backgroundColor: '#f8fafc',
+                borderRadius: '6px',
+                border: '1px solid #e2e8f0'
+              }}>
+                {binaryStatus.binaryStatus?.path || 'Not available'}
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div>
+                <div className="form-label">Platform</div>
+                <div style={{ fontSize: '14px', color: '#64748b' }}>
+                  {binaryStatus.platform}
+                </div>
+              </div>
+              <div>
+                <div className="form-label">Supported Platforms</div>
+                <div style={{ fontSize: '14px', color: '#64748b' }}>
+                  {binaryStatus.supportedPlatforms?.join(', ')}
+                </div>
+              </div>
+            </div>
             {binaryStatus.binaryStatus?.error && (
-              <p style={{ color: 'red' }}>
-                Error: {binaryStatus.binaryStatus.error}
-              </p>
+              <div className="status-indicator status-error" style={{ marginBottom: '16px' }}>
+                ⚠️ {binaryStatus.binaryStatus.error}
+              </div>
             )}
             {!binaryStatus.binaryStatus?.exists && (
               <button
                 onClick={async () => {
                   addLog('Attempting to find binary...');
-                  const findResult =
-                    await window.electron.secureWipe.findBinary();
+                  const findResult = await window.electron.secureWipe.findBinary();
                   if (findResult.success) {
                     setBinaryStatus(findResult);
                     if (findResult.found) {
@@ -309,40 +339,41 @@ export const SecureWipeDemo: React.FC = () => {
                   }
                 }}
                 disabled={isWiping}
+                className="success"
               >
                 🔍 Search for Binary
               </button>
             )}
           </div>
         ) : (
-          <p>Checking...</p>
+          <div className="status-indicator status-info">
+            🔄 Checking binary status...
+          </div>
         )}
       </div>
 
-      {/* Drive List */}
-      <div style={{ marginBottom: '20px' }}>
-        <h3>Available Drives</h3>
+      {/* Drive List Card */}
+      <div className="card">
+        <div className="card-header">
+          <span className="card-icon">💾</span>
+          <h3 className="card-title">Available Drives</h3>
+        </div>
         <button onClick={handleListDrives} disabled={isWiping}>
-          List Drives
+          📋 List Drives
         </button>
         {drives.length > 0 && (
-          <div
-            style={{ marginTop: '10px', maxHeight: '200px', overflowY: 'auto' }}
-          >
+          <div className="drive-list">
             {drives.map((drive, index) => (
-              <div
-                key={index}
-                style={{
-                  padding: '5px',
-                  border: '1px solid #ddd',
-                  margin: '2px',
-                }}
-              >
-                <strong>{drive.path}</strong> - {drive.description}
+              <div key={index} className="drive-item">
+                <div className="drive-info">
+                  <div className="drive-path">{drive.path}</div>
+                  <div className="drive-description">{drive.description}</div>
+                </div>
                 <button
                   onClick={() => setTargetPath(drive.path)}
-                  style={{ marginLeft: '10px', fontSize: '12px' }}
                   disabled={isWiping}
+                  className="success"
+                  style={{ fontSize: '12px', padding: '6px 12px' }}
                 >
                   Select
                 </button>
@@ -352,100 +383,92 @@ export const SecureWipeDemo: React.FC = () => {
         )}
       </div>
 
-      {/* Wipe Configuration */}
-      <div style={{ marginBottom: '20px' }}>
-        <h3>Wipe Configuration</h3>
-        <div style={{ marginBottom: '10px' }}>
-          <label>
-            Target Path:
-            <input
-              type="text"
-              value={targetPath}
-              onChange={(e) => setTargetPath(e.target.value)}
-              placeholder="/path/to/file or /dev/device"
-              style={{ marginLeft: '10px', width: '300px' }}
-              disabled={isWiping}
-            />
-          </label>
+      {/* Configuration Card */}
+      <div className="card">
+        <div className="card-header">
+          <span className="card-icon">⚙️</span>
+          <h3 className="card-title">Wipe Configuration</h3>
         </div>
-        <div style={{ marginBottom: '10px' }}>
-          <label>
-            Algorithm:
-            <select
-              value={algorithm}
-              onChange={(e) => setAlgorithm(e.target.value as any)}
-              style={{ marginLeft: '10px' }}
-              disabled={isWiping}
-            >
-              <option value="random">Random (1 pass)</option>
-              <option value="zeros">Zeros (1 pass)</option>
-              <option value="ones">Ones (1 pass)</option>
-              <option value="dod5220">DoD 5220.22-M (3 passes)</option>
-              <option value="gutmann">Gutmann (35 passes)</option>
-            </select>
-          </label>
+        <div className="form-group">
+          <label className="form-label">Target Path</label>
+          <input
+            type="text"
+            className="form-input"
+            value={targetPath}
+            onChange={(e) => setTargetPath(e.target.value)}
+            placeholder="/path/to/file or /dev/device"
+            disabled={isWiping}
+          />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Algorithm</label>
+          <select
+            className="form-select"
+            value={algorithm}
+            onChange={(e) => setAlgorithm(e.target.value as any)}
+            disabled={isWiping}
+          >
+            <option value="random">Random (1 pass)</option>
+            <option value="zeros">Zeros (1 pass)</option>
+            <option value="ones">Ones (1 pass)</option>
+            <option value="dod5220">DoD 5220.22-M (3 passes)</option>
+            <option value="gutmann">Gutmann (35 passes)</option>
+          </select>
         </div>
       </div>
 
-      {/* Actions */}
-      <div style={{ marginBottom: '20px' }}>
-        <h3>Actions</h3>
-        <button
-          onClick={handleStartDemo}
-          disabled={isWiping || !binaryStatus?.binaryStatus?.exists}
-          style={{ marginRight: '10px' }}
-        >
-          Start Demo (Safe)
-        </button>
-        <button
-          onClick={handleStartWipe}
-          disabled={
-            isWiping || !targetPath || !binaryStatus?.binaryStatus?.exists
-          }
-          style={{ marginRight: '10px' }}
-        >
-          Start Wipe
-        </button>
-        {isWiping && <button onClick={handleCancel}>Cancel</button>}
+      {/* Actions Card */}
+      <div className="card">
+        <div className="card-header">
+          <span className="card-icon">🚀</span>
+          <h3 className="card-title">Actions</h3>
+        </div>
+        <div className="action-buttons">
+          <button
+            onClick={handleStartDemo}
+            disabled={isWiping || !binaryStatus?.binaryStatus?.exists}
+            className="success"
+          >
+            🛡️ Start Demo (Safe)
+          </button>
+          <button
+            onClick={handleStartWipe}
+            disabled={
+              isWiping || !targetPath || !binaryStatus?.binaryStatus?.exists
+            }
+            className="primary"
+          >
+            🔥 Start Wipe
+          </button>
+          {isWiping && (
+            <button onClick={handleCancel} className="danger">
+              ⏹️ Cancel
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Progress */}
+      {/* Progress Card */}
       {(isWiping || progress) && (
-        <div
-          style={{
-            marginBottom: '20px',
-            padding: '10px',
-            backgroundColor: '#e8f5e8',
-            borderRadius: '5px',
-          }}
-        >
-          <h3>Progress</h3>
-          <p>{getProgressInfo()}</p>
+        <div className="card">
+          <div className="card-header">
+            <span className="card-icon">📊</span>
+            <h3 className="card-title">Progress</h3>
+          </div>
+          <div style={{ marginBottom: '16px' }}>
+            <div className="status-indicator status-info">
+              {getProgressInfo()}
+            </div>
+          </div>
           {progress?.type === 'progress' && (
-            <div
-              style={{
-                width: '100%',
-                backgroundColor: '#ddd',
-                borderRadius: '5px',
-                height: '20px',
-              }}
-            >
-              <div
-                style={{
-                  width: `${getProgressPercentage()}%`,
-                  backgroundColor: '#4CAF50',
-                  height: '100%',
-                  borderRadius: '5px',
-                  transition: 'width 0.3s ease',
-                }}
-              />
-              <div
-                style={{
-                  textAlign: 'center',
-                  lineHeight: '20px',
-                  marginTop: '-20px',
-                }}
-              >
+            <div>
+              <div className="progress-container">
+                <div 
+                  className="progress-bar" 
+                  style={{ width: `${getProgressPercentage()}%` }}
+                />
+              </div>
+              <div className="progress-text">
                 {getProgressPercentage().toFixed(1)}%
               </div>
             </div>
@@ -453,25 +476,25 @@ export const SecureWipeDemo: React.FC = () => {
         </div>
       )}
 
-      {/* Log */}
-      <div>
-        <h3>Log</h3>
-        <div
-          style={{
-            height: '200px',
-            overflowY: 'auto',
-            border: '1px solid #ddd',
-            padding: '10px',
-            backgroundColor: '#f9f9f9',
-            fontSize: '12px',
-          }}
-        >
-          {log.map((entry, index) => (
-            <div key={index}>{entry}</div>
-          ))}
+      {/* Log Card */}
+      <div className="card">
+        <div className="card-header">
+          <span className="card-icon">📝</span>
+          <h3 className="card-title">Activity Log</h3>
         </div>
-        <button onClick={() => setLog([])} style={{ marginTop: '10px' }}>
-          Clear Log
+        <div className="log-container">
+          {log.length > 0 ? (
+            log.map((entry, index) => (
+              <div key={index} className="log-entry">{entry}</div>
+            ))
+          ) : (
+            <div className="log-entry" style={{ color: '#64748b', fontStyle: 'italic' }}>
+              No activity yet...
+            </div>
+          )}
+        </div>
+        <button onClick={() => setLog([])} className="danger" style={{ marginTop: '12px' }}>
+          🗑️ Clear Log
         </button>
       </div>
     </div>

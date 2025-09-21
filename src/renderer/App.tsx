@@ -5,14 +5,17 @@ import { SecureWipeDemo } from './components/SecureWipeDemo';
 
 function Hello() {
   return (
-    <div>
-      <div className="Hello">
-        <img width="200" alt="icon" src={icon} />
+    <div className="app-container fade-in">
+      <div className="app-header">
+        <img className="app-logo" alt="Secure Wipe" src={icon} />
+        <h1 className="app-title">Secure Wipe</h1>
+        <p className="app-subtitle">
+          Professional data sanitization and secure file wiping tool
+        </p>
       </div>
-      <h1>Secure Wipe</h1>
-      <div className="Hello">
+      <div className="nav-buttons">
         <Link to="/demo">
-          <button type="button">
+          <button type="button" className="primary nav-button">
             <span role="img" aria-label="demo">
               🔧
             </span>
@@ -24,7 +27,7 @@ function Hello() {
           target="_blank"
           rel="noreferrer"
         >
-          <button type="button">
+          <button type="button" className="nav-button">
             <span role="img" aria-label="books">
               📚
             </span>
