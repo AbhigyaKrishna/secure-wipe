@@ -23,6 +23,7 @@ export class SecureWipeService extends EventEmitter {
   private timeout: number;
   private activeProcess: ChildProcess | null = null;
   private timeoutHandle: NodeJS.Timeout | null = null;
+  private jsonBuffer: string = ''; // Buffer for accumulating multi-line JSON
 
   constructor(options: SecureWipeServiceOptions = {}) {
     super();
@@ -191,16 +192,79 @@ export class SecureWipeService extends EventEmitter {
   }
 
   /**
-   * Parse JSON event from stdout line
+   * Parse JSON events from accumulated buffer
+   * Handles both single-line and multi-line JSON output
    */
-  private parseEvent(line: string): SecureWipeEvent | null {
+  private parseEvents(data: string): SecureWipeEvent[] {
+    const events: SecureWipeEvent[] = [];
+    this.jsonBuffer += data;
+
+    // Try to extract complete JSON objects from the buffer
+    let startIndex = 0;
+    let braceCount = 0;
+    let inString = false;
+    let escapeNext = false;
+
+    for (let i = 0; i < this.jsonBuffer.length; i++) {
+      const char = this.jsonBuffer[i];
+
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+
+      if (char === '\\') {
+        escapeNext = true;
+        continue;
+      }
+
+      if (char === '"' && !escapeNext) {
+        inString = !inString;
+        continue;
+      }
+
+      if (!inString) {
+        if (char === '{') {
+          if (braceCount === 0) {
+            startIndex = i;
+          }
+          braceCount++;
+        } else if (char === '}') {
+          braceCount--;
+          if (braceCount === 0) {
+            // Found complete JSON object
+            const jsonStr = this.jsonBuffer.substring(startIndex, i + 1);
+            const event = this.parseEvent(jsonStr);
+            if (event) {
+              events.push(event);
+            }
+            // Update buffer to remove parsed content
+            this.jsonBuffer = this.jsonBuffer.substring(i + 1);
+            i = -1; // Reset loop
+            startIndex = 0;
+          }
+        }
+      }
+    }
+
+    return events;
+  }
+
+  /**
+   * Parse a single JSON event
+   */
+  private parseEvent(jsonStr: string): SecureWipeEvent | null {
     try {
-      const trimmed = line.trim();
+      const trimmed = jsonStr.trim();
       if (!trimmed) return null;
 
       return JSON.parse(trimmed) as SecureWipeEvent;
     } catch (error) {
-      console.warn('Failed to parse JSON event:', line, error);
+      console.warn(
+        'Failed to parse JSON event:',
+        jsonStr.substring(0, 100) + '...',
+        error,
+      );
       return null;
     }
   }
@@ -229,26 +293,23 @@ export class SecureWipeService extends EventEmitter {
 
         // Handle stdout (JSON events)
         this.activeProcess.stdout?.on('data', (data: Buffer) => {
-          const lines = data.toString().split('\n');
+          const parsedEvents = this.parseEvents(data.toString());
 
-          for (const line of lines) {
-            const event = this.parseEvent(line);
-            if (event) {
-              events.push(event);
+          for (const event of parsedEvents) {
+            events.push(event);
 
-              // Emit to service event emitter
-              this.emit('event', event);
+            // Emit to service event emitter
+            this.emit('event', event);
 
-              // Call progress callback if provided
-              if (onProgress) {
-                onProgress(event);
-              }
+            // Call progress callback if provided
+            if (onProgress) {
+              onProgress(event);
+            }
 
-              // Check for errors
-              if (event.type === 'error') {
-                hasError = true;
-                errorMessage = event.message;
-              }
+            // Check for errors
+            if (event.type === 'error') {
+              hasError = true;
+              errorMessage = event.message;
             }
           }
         });
@@ -319,13 +380,12 @@ export class SecureWipeService extends EventEmitter {
 
         // Handle stdout
         this.activeProcess.stdout?.on('data', (data: Buffer) => {
-          const lines = data.toString().split('\n');
+          const parsedEvents = this.parseEvents(data.toString());
 
-          for (const line of lines) {
-            const event = this.parseEvent(line);
-            if (event && event.type === 'drive_list') {
+          for (const event of parsedEvents) {
+            if (event.type === 'drive_list') {
               drives = event.drives;
-            } else if (event && event.type === 'error') {
+            } else if (event.type === 'error') {
               errorMessage = event.message;
             }
           }
@@ -393,6 +453,7 @@ export class SecureWipeService extends EventEmitter {
       this.timeoutHandle = null;
     }
     this.activeProcess = null;
+    this.jsonBuffer = ''; // Clear JSON buffer
   }
 
   /**
