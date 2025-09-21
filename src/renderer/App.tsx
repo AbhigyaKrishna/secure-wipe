@@ -2,8 +2,13 @@ import { MemoryRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import icon from '../../assets/icon.svg';
 import './App.css';
 import { SecureWipeDemo } from './components/SecureWipeDemo';
+import { LoginForm } from './components/LoginForm';
+import { VerificationForm } from './components/VerificationForm';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 function Hello() {
+  const { isAuthenticated, logout } = useAuth();
+
   return (
     <div className="app-container fade-in">
       <div className="app-header">
@@ -34,18 +39,68 @@ function Hello() {
             View Project
           </button>
         </a>
+        {isAuthenticated && (
+          <button type="button" className="danger nav-button" onClick={logout}>
+            <span role="img" aria-label="logout">
+              🚪
+            </span>
+            Logout
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { 
+    isAuthenticated, 
+    needsVerification, 
+    userEmail, 
+    login, 
+    verifyCode, 
+    resendCode, 
+    isLoading, 
+    error 
+  } = useAuth();
+
+  if (!isAuthenticated) {
+    return <LoginForm 
+      onLogin={login}
+      isLoading={isLoading}
+      error={error}
+    />;
+  }
+
+  if (needsVerification) {
+    return <VerificationForm
+      email={userEmail || ''}
+      onVerify={verifyCode}
+      onResendCode={resendCode}
+      isLoading={isLoading}
+      error={error}
+    />;
+  }
+
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Hello />} />
-        <Route path="/demo" element={<SecureWipeDemo />} />
-      </Routes>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={<ProtectedRoute><Hello /></ProtectedRoute>} />
+          <Route 
+            path="/demo" 
+            element={
+              <ProtectedRoute>
+                <SecureWipeDemo />
+              </ProtectedRoute>
+            } 
+          />
+        </Routes>
+      </Router>
+    </AuthProvider>
   );
 }

@@ -9,6 +9,7 @@ import {
   SecureWipeConfig,
   DriveInfo,
 } from '../../main/types/secure-wipe';
+import { useAuth } from '../contexts/AuthContext';
 
 interface SecureWipeResult {
   success: boolean;
@@ -37,6 +38,7 @@ interface BinaryCheckResult {
 }
 
 export const SecureWipeDemo: React.FC = () => {
+  const { userEmail, logout } = useAuth();
   const [targetPath, setTargetPath] = useState('');
   const [algorithm, setAlgorithm] = useState<
     'dod5220' | 'gutmann' | 'random' | 'zeros' | 'ones'
@@ -266,6 +268,17 @@ export const SecureWipeDemo: React.FC = () => {
   return (
     <div className="app-container fade-in">
       <div className="app-header">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span className="status-indicator status-success">✅</span>
+            <span style={{ fontSize: '14px', color: '#64748b' }}>
+              Authenticated as: <strong>{userEmail}</strong>
+            </span>
+          </div>
+          <button onClick={logout} className="danger" style={{ fontSize: '12px', padding: '6px 12px' }}>
+            🚪 Logout
+          </button>
+        </div>
         <h1 className="app-title">Secure Wipe Demo</h1>
         <p className="app-subtitle">
           Professional data sanitization and secure file wiping demonstration

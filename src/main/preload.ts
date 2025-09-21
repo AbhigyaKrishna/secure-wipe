@@ -37,6 +37,16 @@ const electronHandler = {
         ipcRenderer.removeListener('secure-wipe:progress', subscription);
     },
   },
+  api: {
+    login: (request: { email: string; password: string }) => 
+      ipcRenderer.invoke('api:login', request),
+    verifyDigiLocker: (request: { email: string; verificationCode: string }) => 
+      ipcRenderer.invoke('api:verify-digilocker', request),
+    resendVerification: (request: { email: string }) => 
+      ipcRenderer.invoke('api:resend-verification', request),
+    testHandlers: () => 
+      ipcRenderer.invoke('test-api-handlers'),
+  },
 };
 
 contextBridge.exposeInMainWorld('electron', electronHandler);

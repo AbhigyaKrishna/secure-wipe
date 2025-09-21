@@ -127,6 +127,7 @@ a:hover {
   width: 90%;
   min-height: fit-content;
   margin: 0 auto;
+  border: 1px solid #e2e8f0;
 }
 
 /* Header Styles */
@@ -232,6 +233,7 @@ a:hover {
   font-size: 14px;
   transition: all 0.2s ease;
   background: white;
+  color: #1e293b;
 }
 
 .form-input:focus, .form-select:focus {
@@ -308,6 +310,7 @@ a:hover {
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   margin-top: 12px;
+  background: white;
 }
 
 .drive-item {

@@ -16,6 +16,11 @@ import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import { secureWipeService } from './services/secure-wipe.service';
 import { SecureWipeConfig, SecureWipeEvent } from './types/secure-wipe';
+import { apiService } from './services/api.service';
+
+// Initialize API service
+console.log('Initializing API service...');
+apiService;
 
 class AppUpdater {
   constructor() {
@@ -31,6 +36,12 @@ ipcMain.on('ipc-example', async (event, arg) => {
   const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
   console.log(msgTemplate(arg));
   event.reply('ipc-example', msgTemplate('pong'));
+});
+
+// Test API handler registration
+ipcMain.handle('test-api-handlers', () => {
+  console.log('Test API handlers called');
+  return { success: true, message: 'API handlers are working' };
 });
 
 // Secure Wipe IPC handlers
