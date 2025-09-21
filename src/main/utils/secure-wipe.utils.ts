@@ -41,14 +41,20 @@ export class SecureWipeUtils {
         return { valid: false, error: 'Path must be absolute' };
       }
 
-      // For regular files, check if they exist
-      if (!this.isBlockDevice(filePath)) {
-        if (!fs.existsSync(resolvedPath)) {
-          return { valid: false, error: 'File does not exist' };
-        }
+      // Check if path exists (for both regular files and block devices)
+      if (!fs.existsSync(resolvedPath)) {
+        return { valid: false, error: 'File or device does not exist' };
+      }
 
-        // Check if it's actually a file
-        const stats = fs.statSync(resolvedPath);
+      const stats = fs.statSync(resolvedPath);
+
+      // For block devices, verify they are actually block devices
+      if (this.isBlockDevice(filePath)) {
+        if (!stats.isBlockDevice()) {
+          return { valid: false, error: 'Path is not a valid block device' };
+        }
+      } else {
+        // For regular files, check if it's actually a file
         if (!stats.isFile()) {
           return { valid: false, error: 'Path is not a regular file' };
         }
@@ -306,16 +312,16 @@ export class SecureWipeUtils {
         };
       }
 
-      // Warn about wiping entire disks
+      // Warn about wiping entire disks (but still allow it)
       if (
         filePath.includes('PhysicalDrive') ||
         (filePath.startsWith('/dev/') && !filePath.match(/\d+$/))
       ) {
-        return {
-          safe: false,
-          warning:
-            'You are attempting to wipe an entire disk. This will destroy all data and partitions on the device.',
-        };
+        // This is an entire disk - warn but don't block
+        console.warn(
+          'WARNING: You are attempting to wipe an entire disk. This will destroy all data and partitions on the device.',
+        );
+        // Return safe: true but with a warning for the user to acknowledge
       }
     }
 

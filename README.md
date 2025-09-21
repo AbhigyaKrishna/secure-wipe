@@ -52,6 +52,69 @@ npm run package
 
 See our [docs and guides here](https://electron-react-boilerplate.js.org/docs/installation)
 
+## 🔐 Admin Privilege Features
+
+This application includes automatic admin privilege handling for secure wipe operations that require elevated permissions.
+
+### Features
+
+- **Automatic Privilege Detection**: The app automatically detects when admin privileges are required based on the target path
+- **Cross-Platform Support**: Works on Linux, macOS, and Windows with appropriate elevation methods
+- **Safe Operation**: Includes path validation and safety checks before requesting privileges
+- **Transparent Logging**: All privilege operations are logged for security and debugging
+
+### Platform-Specific Behavior
+
+| Platform    | Elevation Method           | GUI Support           |
+| ----------- | -------------------------- | --------------------- |
+| **Linux**   | `sudo` or `pkexec`         | Yes (if DE available) |
+| **macOS**   | `sudo` with native dialogs | Yes                   |
+| **Windows** | UAC prompts                | Yes                   |
+
+### Usage
+
+The app provides two ways to perform secure wipe operations:
+
+1. **Standard Wipe** (`window.electron.secureWipe.wipe()`) - Original method without privilege handling
+2. **Privilege-Aware Wipe** (`window.electron.secureWipe.wipeWithPrivileges()`) - New method with automatic privilege escalation
+
+### API Methods
+
+```typescript
+// Check privilege requirements for a target path
+const privilegeStatus =
+  await window.electron.secureWipe.checkPrivileges('/path/to/target');
+
+// Perform wipe with automatic privilege handling
+const result = await window.electron.secureWipe.wipeWithPrivileges({
+  target: '/path/to/target',
+  algorithm: 'random',
+  requestPrivileges: true, // Enable automatic privilege requests
+  privilegeOptions: {
+    name: 'Secure Wipe', // App name shown in privilege dialogs
+    windowsHide: true, // Hide console windows on Windows
+  },
+});
+
+// Get user-friendly elevation description
+const description =
+  await window.electron.secureWipe.getElevationDescription('/path/to/target');
+
+// Check if GUI prompts are supported
+const supportsGui = await window.electron.secureWipe.supportsGuiPrompts();
+```
+
+### Security Considerations
+
+- **Path Validation**: All paths are validated to prevent unauthorized access
+- **Safety Checks**: System-critical locations are protected from accidental wiping
+- **Minimal Privileges**: Elevation is requested only when absolutely necessary
+- **User Consent**: Users can disable automatic privilege requests
+
+### Demo Component
+
+See `src/renderer/components/PrivilegeAwareWipeDemo.tsx` for a complete example of how to use the privilege-aware features.
+
 ## Community
 
 Join our Discord: https://discord.gg/Fjy3vfgy5q

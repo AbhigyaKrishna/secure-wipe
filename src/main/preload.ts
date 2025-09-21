@@ -24,12 +24,22 @@ const electronHandler = {
   },
   secureWipe: {
     wipe: (config: any) => ipcRenderer.invoke('secure-wipe:wipe', config),
+    wipeWithPrivileges: (config: any) =>
+      ipcRenderer.invoke('secure-wipe:wipe-with-privileges', config),
     listDrives: () => ipcRenderer.invoke('secure-wipe:list-drives'),
     getSystemInfo: () => ipcRenderer.invoke('secure-wipe:get-system-info'),
     cancel: () => ipcRenderer.invoke('secure-wipe:cancel'),
     checkBinary: () => ipcRenderer.invoke('secure-wipe:check-binary'),
     findBinary: () => ipcRenderer.invoke('secure-wipe:find-binary'),
     isActive: () => ipcRenderer.invoke('secure-wipe:is-active'),
+    checkPrivileges: (targetPath?: string) =>
+      ipcRenderer.invoke('secure-wipe:check-privileges', targetPath),
+    validateBinaryAccess: () =>
+      ipcRenderer.invoke('secure-wipe:validate-binary-access'),
+    supportsGuiPrompts: () =>
+      ipcRenderer.invoke('secure-wipe:supports-gui-prompts'),
+    getElevationDescription: (targetPath?: string) =>
+      ipcRenderer.invoke('secure-wipe:get-elevation-description', targetPath),
     onProgress: (callback: (event: any) => void) => {
       const subscription = (_event: IpcRendererEvent, event: any) =>
         callback(event);
@@ -39,14 +49,13 @@ const electronHandler = {
     },
   },
   api: {
-    login: (request: { email: string; password: string }) => 
+    login: (request: { email: string; password: string }) =>
       ipcRenderer.invoke('api:login', request),
-    verifyDigiLocker: (request: { email: string; verificationCode: string }) => 
+    verifyDigiLocker: (request: { email: string; verificationCode: string }) =>
       ipcRenderer.invoke('api:verify-digilocker', request),
-    resendVerification: (request: { email: string }) => 
+    resendVerification: (request: { email: string }) =>
       ipcRenderer.invoke('api:resend-verification', request),
-    testHandlers: () => 
-      ipcRenderer.invoke('test-api-handlers'),
+    testHandlers: () => ipcRenderer.invoke('test-api-handlers'),
   },
 };
 

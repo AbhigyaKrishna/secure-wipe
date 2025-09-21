@@ -1,6 +1,22 @@
 /**
- * Example component demonstrating secure-wipe service usage
- * This shows how to use the service from the renderer process
+ * Enhanced SecureWipeDemo component with privilege escalation support
+ *
+ * This component demonstrates both basic and privilege-aware secure wipe functionality:
+ *
+ * Features:
+ * - Automatic privilege detection based on target path
+ * - Cross-platform privilege escalation (Linux: sudo/pkexec, macOS: sudo, Windows: UAC)
+ * - Two wipe modes: Basic (original) and Smart (privilege-aware)
+ * - Real-time privilege status display
+ * - User control over privilege requests
+ * - Transparent logging of all operations including privilege escalation
+ *
+ * Usage:
+ * 1. Enter a target path to see privilege requirements
+ * 2. Configure wipe settings (algorithm, buffer size, etc.)
+ * 3. Choose whether to enable automatic privilege requests
+ * 4. Use "Start Wipe (Basic)" for original behavior or "Start Wipe (Smart)" for privilege-aware operation
+ * 5. Monitor progress and privilege operations in the activity log
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -44,6 +60,25 @@ interface BinaryCheckResult {
   error?: string;
 }
 
+interface PrivilegeStatus {
+  success: boolean;
+  hasPrivileges: boolean;
+  needsElevation: boolean;
+  currentUser: string;
+  isRoot: boolean;
+  platform: string;
+  method?: string;
+  error?: string;
+}
+
+interface PrivilegeAwareWipeResult {
+  success: boolean;
+  error?: string;
+  privilegesRequested?: boolean;
+  privilegeMethod?: string;
+  privilegeError?: string;
+}
+
 export const SecureWipeDemo: React.FC = () => {
   const { userEmail, logout } = useAuth();
   const [targetPath, setTargetPath] = useState('');
@@ -59,6 +94,15 @@ export const SecureWipeDemo: React.FC = () => {
   const [drives, setDrives] = useState<DriveInfo[]>([]);
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
   const [binaryStatus, setBinaryStatus] = useState<BinaryCheckResult | null>(
+    null,
+  );
+  const [privilegeStatus, setPrivilegeStatus] =
+    useState<PrivilegeStatus | null>(null);
+  const [requestPrivileges, setRequestPrivileges] = useState(true);
+  const [elevationDescription, setElevationDescription] = useState<string>('');
+  const [supportsGui, setSupportsGui] = useState<boolean>(false);
+  const [isCheckingPrivileges, setIsCheckingPrivileges] = useState(false);
+  const [lastPrivilegeCheck, setLastPrivilegeCheck] = useState<Date | null>(
     null,
   );
   const [log, setLog] = useState<string[]>([]);
@@ -204,6 +248,84 @@ export const SecureWipeDemo: React.FC = () => {
     };
   }, [addLog]);
 
+  // Check privilege status when target path changes
+  useEffect(() => {
+    const checkPrivilegeStatus = async () => {
+      if (!targetPath.trim()) {
+        setPrivilegeStatus(null);
+        setElevationDescription('');
+        return;
+      }
+
+      try {
+        addLog(`Checking privileges for: ${targetPath}`);
+
+        const result = (await window.electron.secureWipe.checkPrivileges(
+          targetPath,
+        )) as PrivilegeStatus;
+        setPrivilegeStatus(result);
+
+        if (result.success) {
+          addLog(
+            `Current user: ${result.currentUser} (${result.isRoot ? 'admin' : 'regular user'})`,
+          );
+          addLog(
+            `Has privileges: ${result.hasPrivileges ? 'Yes' : 'No'}, Needs elevation: ${result.needsElevation ? 'Yes' : 'No'}`,
+          );
+          if (result.method) {
+            addLog(`Elevation method: ${result.method}`);
+          }
+
+          // Get elevation description if needed
+          if (result.needsElevation) {
+            try {
+              const descResult =
+                await window.electron.secureWipe.getElevationDescription(
+                  targetPath,
+                );
+              if (descResult.success && descResult.description) {
+                setElevationDescription(descResult.description);
+                addLog(`Elevation prompt: ${descResult.description}`);
+              }
+            } catch (error) {
+              addLog(`Failed to get elevation description: ${error}`);
+            }
+          } else {
+            setElevationDescription('');
+          }
+        } else {
+          addLog(`Privilege check failed: ${result.error}`);
+        }
+      } catch (error) {
+        addLog(`Privilege check error: ${error}`);
+        setPrivilegeStatus(null);
+      }
+    };
+
+    // Debounce the privilege check to avoid too many calls
+    const timeoutId = setTimeout(checkPrivilegeStatus, 500);
+    return () => clearTimeout(timeoutId);
+  }, [targetPath, addLog]);
+
+  // Check GUI prompt support on mount
+  useEffect(() => {
+    const checkGuiSupport = async () => {
+      try {
+        const result = await window.electron.secureWipe.supportsGuiPrompts();
+        if (result.success) {
+          setSupportsGui(result.supportsGui || false);
+          addLog(
+            `GUI privilege prompts: ${result.supportsGui ? 'Supported' : 'Not supported'}`,
+          );
+        }
+      } catch (error) {
+        addLog(`Failed to check GUI prompt support: ${error}`);
+      }
+    };
+
+    checkGuiSupport();
+  }, [addLog]);
+
   const handleStartWipe = async () => {
     if (!targetPath.trim()) {
       addLog('Please enter a target path');
@@ -278,6 +400,144 @@ export const SecureWipeDemo: React.FC = () => {
     }
   };
 
+  const handleStartPrivilegeAwareWipe = async () => {
+    if (!targetPath.trim()) {
+      addLog('Please enter a target path');
+      return;
+    }
+
+    if (!privilegeStatus) {
+      addLog('Privilege status not available, please wait...');
+      return;
+    }
+
+    const config = {
+      target: targetPath.trim(),
+      algorithm,
+      bufferSize: bufferSize > 0 ? bufferSize : undefined,
+      passes: useCustomPasses && customPasses > 0 ? customPasses : undefined,
+      requestPrivileges,
+      privilegeOptions: {
+        name: 'Secure Wipe',
+        windowsHide: true,
+      },
+    };
+
+    try {
+      setIsWiping(true);
+      setProgress(null);
+      addLog('Starting privilege-aware wipe operation...');
+      addLog(`Configuration: ${JSON.stringify(config, null, 2)}`);
+
+      if (privilegeStatus.needsElevation && requestPrivileges) {
+        addLog('⚠️  Admin privileges will be requested');
+        if (elevationDescription) {
+          addLog(`   ${elevationDescription}`);
+        }
+        if (!supportsGui) {
+          addLog('   Note: Console-based privilege prompt (no GUI)');
+        }
+      }
+
+      const result = (await window.electron.secureWipe.wipeWithPrivileges(
+        config,
+      )) as PrivilegeAwareWipeResult;
+
+      if (result.success) {
+        addLog('✅ Privilege-aware wipe operation completed successfully!');
+        if (result.privilegesRequested) {
+          addLog(
+            `   Privileges were requested using: ${result.privilegeMethod}`,
+          );
+        }
+      } else {
+        addLog(`❌ Privilege-aware wipe operation failed: ${result.error}`);
+        if (result.privilegeError) {
+          addLog(`   Privilege error: ${result.privilegeError}`);
+        }
+      }
+    } catch (error) {
+      addLog(`Privilege-aware wipe operation error: ${error}`);
+    } finally {
+      setIsWiping(false);
+    }
+  };
+
+  const handleManualPrivilegeCheck = async () => {
+    if (!targetPath.trim()) {
+      addLog('Please enter a target path first');
+      return;
+    }
+
+    setIsCheckingPrivileges(true);
+    addLog('🔍 Manually checking privilege requirements...');
+
+    try {
+      const result = (await window.electron.secureWipe.checkPrivileges(
+        targetPath,
+      )) as PrivilegeStatus;
+      setPrivilegeStatus(result);
+      setLastPrivilegeCheck(new Date());
+
+      if (result.success) {
+        addLog('✅ Privilege check completed successfully');
+        addLog(
+          `   Current user: ${result.currentUser} (${result.isRoot ? 'Administrator' : 'Regular User'})`,
+        );
+        addLog(`   Platform: ${result.platform}`);
+        addLog(
+          `   Has current privileges: ${result.hasPrivileges ? 'Yes' : 'No'}`,
+        );
+        addLog(
+          `   Requires elevation: ${result.needsElevation ? 'Yes' : 'No'}`,
+        );
+
+        if (result.needsElevation && result.method) {
+          addLog(`   Elevation method: ${result.method}`);
+
+          // Get detailed elevation description
+          try {
+            const descResult =
+              await window.electron.secureWipe.getElevationDescription(
+                targetPath,
+              );
+            if (descResult.success && descResult.description) {
+              setElevationDescription(descResult.description);
+              addLog(`   User prompt: "${descResult.description}"`);
+            }
+          } catch (error) {
+            addLog(`   Failed to get elevation description: ${error}`);
+          }
+        } else {
+          setElevationDescription('');
+        }
+
+        // Check binary access validation
+        try {
+          const binaryAccess =
+            await window.electron.secureWipe.validateBinaryAccess();
+          if (binaryAccess.success) {
+            addLog(
+              `   Binary access: ${binaryAccess.canExecute ? 'Executable' : 'Not executable'}`,
+            );
+            if (binaryAccess.needsElevation) {
+              addLog(`   Binary requires elevation: Yes`);
+            }
+          }
+        } catch (error) {
+          addLog(`   Binary access check failed: ${error}`);
+        }
+      } else {
+        addLog(`❌ Privilege check failed: ${result.error}`);
+      }
+    } catch (error) {
+      addLog(`❌ Manual privilege check error: ${error}`);
+      setPrivilegeStatus(null);
+    } finally {
+      setIsCheckingPrivileges(false);
+    }
+  };
+
   const getProgressPercentage = (): number => {
     if (!progress || progress.type !== 'progress') return 0;
     return progress.percent;
@@ -308,14 +568,25 @@ export const SecureWipeDemo: React.FC = () => {
   return (
     <div className="app-container fade-in">
       <div className="app-header">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '20px',
+          }}
+        >
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span className="status-indicator status-success">✅</span>
             <span style={{ fontSize: '14px', color: '#64748b' }}>
               Authenticated as: <strong>{userEmail}</strong>
             </span>
           </div>
-          <button onClick={logout} className="danger" style={{ fontSize: '12px', padding: '6px 12px' }}>
+          <button
+            onClick={logout}
+            className="danger"
+            style={{ fontSize: '12px', padding: '6px 12px' }}
+          >
             🚪 Logout
           </button>
         </div>
@@ -323,6 +594,158 @@ export const SecureWipeDemo: React.FC = () => {
         <p className="app-subtitle">
           Professional data sanitization and secure file wiping demonstration
         </p>
+      </div>
+
+      {/* Quick Privilege Status Summary */}
+      <div
+        className="card"
+        style={{ marginBottom: '16px', backgroundColor: '#f8fafc' }}
+      >
+        <div style={{ padding: '16px' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              marginBottom: '12px',
+            }}
+          >
+            <span style={{ fontSize: '18px' }}>🔐</span>
+            <h3
+              style={{
+                margin: 0,
+                fontSize: '16px',
+                fontWeight: 'bold',
+                color: '#374151',
+              }}
+            >
+              Privilege Status Summary
+            </h3>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: '12px',
+            }}
+          >
+            <div className="privilege-info-box">
+              <div
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  color: '#6b7280',
+                  marginBottom: '4px',
+                }}
+              >
+                Current User
+              </div>
+              <div style={{ fontSize: '14px', color: '#374151' }}>
+                {privilegeStatus ? (
+                  <>
+                    {privilegeStatus.currentUser}
+                    <span style={{ marginLeft: '8px' }}>
+                      {privilegeStatus.isRoot ? '👑 Admin' : '👤 Regular'}
+                    </span>
+                  </>
+                ) : (
+                  'Not checked'
+                )}
+              </div>
+            </div>
+
+            <div className="privilege-info-box">
+              <div
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  color: '#6b7280',
+                  marginBottom: '4px',
+                }}
+              >
+                Target Privileges
+              </div>
+              <div style={{ fontSize: '14px', color: '#374151' }}>
+                {!targetPath.trim() ? (
+                  'No target specified'
+                ) : !privilegeStatus ? (
+                  '🔄 Checking...'
+                ) : privilegeStatus.needsElevation ? (
+                  <span style={{ color: '#dc2626' }}>⚠️ Admin Required</span>
+                ) : (
+                  <span style={{ color: '#059669' }}>
+                    ✅ No elevation needed
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="privilege-info-box">
+              <div
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  color: '#6b7280',
+                  marginBottom: '4px',
+                }}
+              >
+                Platform Support
+              </div>
+              <div style={{ fontSize: '14px', color: '#374151' }}>
+                {privilegeStatus ? (
+                  <>
+                    {privilegeStatus.platform}
+                    {privilegeStatus.method && (
+                      <span
+                        style={{
+                          marginLeft: '8px',
+                          fontSize: '12px',
+                          color: '#6b7280',
+                        }}
+                      >
+                        ({privilegeStatus.method})
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  'Unknown'
+                )}
+              </div>
+            </div>
+
+            <div className="privilege-info-box">
+              <div
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  color: '#6b7280',
+                  marginBottom: '4px',
+                }}
+              >
+                GUI Prompts
+              </div>
+              <div style={{ fontSize: '14px', color: '#374151' }}>
+                {supportsGui ? '✅ Supported' : '❌ Console only'}
+              </div>
+            </div>
+          </div>
+
+          {targetPath.trim() && !privilegeStatus && (
+            <div style={{ marginTop: '12px', textAlign: 'center' }}>
+              <button
+                onClick={handleManualPrivilegeCheck}
+                disabled={isWiping || isCheckingPrivileges}
+                className="primary"
+                style={{ fontSize: '12px', padding: '6px 16px' }}
+              >
+                {isCheckingPrivileges
+                  ? '🔄 Checking...'
+                  : '🔍 Check Privileges Now'}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Binary Status Card */}
@@ -419,6 +842,240 @@ export const SecureWipeDemo: React.FC = () => {
         ) : (
           <div className="status-indicator status-info">
             🔄 Checking binary status...
+          </div>
+        )}
+      </div>
+
+      {/* Privilege Status Card */}
+      <div className="card">
+        <div className="card-header">
+          <span className="card-icon">🔐</span>
+          <h3 className="card-title">Privilege Status</h3>
+        </div>
+        {targetPath.trim() ? (
+          privilegeStatus ? (
+            <div style={{ marginTop: '16px' }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '16px',
+                  marginBottom: '16px',
+                }}
+              >
+                <div>
+                  <div className="form-label">Target Path</div>
+                  <div
+                    style={{
+                      fontSize: '13px',
+                      color: '#64748b',
+                      fontFamily: 'Monaco, Menlo, monospace',
+                    }}
+                  >
+                    {targetPath}
+                  </div>
+                </div>
+                <div>
+                  <div className="form-label">Current User</div>
+                  <div style={{ fontSize: '14px', color: '#64748b' }}>
+                    {privilegeStatus.currentUser} (
+                    {privilegeStatus.isRoot ? '👑 Admin' : '👤 Regular'})
+                  </div>
+                </div>
+                <div>
+                  <div className="form-label">Has Privileges</div>
+                  <span
+                    className={`status-indicator ${
+                      privilegeStatus.hasPrivileges
+                        ? 'status-success'
+                        : 'status-warning'
+                    }`}
+                    style={{ fontSize: '12px', padding: '4px 8px' }}
+                  >
+                    {privilegeStatus.hasPrivileges ? '✅ Yes' : '⚠️ No'}
+                  </span>
+                </div>
+                <div>
+                  <div className="form-label">Needs Elevation</div>
+                  <span
+                    className={`status-indicator ${
+                      privilegeStatus.needsElevation
+                        ? 'status-warning'
+                        : 'status-success'
+                    }`}
+                    style={{ fontSize: '12px', padding: '4px 8px' }}
+                  >
+                    {privilegeStatus.needsElevation ? '⚠️ Yes' : '✅ No'}
+                  </span>
+                </div>
+              </div>
+
+              {privilegeStatus.needsElevation && (
+                <div
+                  className="status-indicator status-info"
+                  style={{ marginBottom: '16px' }}
+                >
+                  ⚠️ Admin privileges required for this target path
+                  {elevationDescription && (
+                    <div
+                      style={{
+                        fontSize: '12px',
+                        marginTop: '4px',
+                        opacity: 0.8,
+                      }}
+                    >
+                      Method: {elevationDescription}
+                    </div>
+                  )}
+                  {!supportsGui && (
+                    <div
+                      style={{
+                        fontSize: '12px',
+                        marginTop: '4px',
+                        opacity: 0.8,
+                      }}
+                    >
+                      Note: Console-based authentication (no GUI dialog)
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {privilegeStatus.method && (
+                <div style={{ marginBottom: '16px' }}>
+                  <div className="form-label">Elevation Method</div>
+                  <div style={{ fontSize: '14px', color: '#64748b' }}>
+                    {privilegeStatus.method}
+                  </div>
+                </div>
+              )}
+
+              {/* Platform and GUI Support Info */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '16px',
+                  marginBottom: '16px',
+                  padding: '12px',
+                  backgroundColor: '#f8fafc',
+                  borderRadius: '6px',
+                  border: '1px solid #e2e8f0',
+                }}
+              >
+                <div>
+                  <div className="form-label">Platform</div>
+                  <div style={{ fontSize: '14px', color: '#64748b' }}>
+                    {privilegeStatus.platform}
+                  </div>
+                </div>
+                <div>
+                  <div className="form-label">GUI Prompts</div>
+                  <div style={{ fontSize: '14px', color: '#64748b' }}>
+                    {supportsGui ? '✅ Supported' : '❌ Console Only'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Last Check Info */}
+              {lastPrivilegeCheck && (
+                <div style={{ marginBottom: '16px' }}>
+                  <div className="form-label">Last Checked</div>
+                  <div style={{ fontSize: '12px', color: '#64748b' }}>
+                    {lastPrivilegeCheck.toLocaleString()}
+                  </div>
+                </div>
+              )}
+
+              {/* Manual Check Button */}
+              <div
+                style={{ display: 'flex', gap: '12px', alignItems: 'center' }}
+              >
+                <button
+                  onClick={handleManualPrivilegeCheck}
+                  disabled={
+                    isWiping || isCheckingPrivileges || !targetPath.trim()
+                  }
+                  className="primary"
+                  style={{ flex: 1 }}
+                >
+                  {isCheckingPrivileges
+                    ? '🔄 Checking...'
+                    : '🔍 Check Privileges'}
+                </button>
+                <button
+                  onClick={() => {
+                    setPrivilegeStatus(null);
+                    setElevationDescription('');
+                    setLastPrivilegeCheck(null);
+                    addLog('🗑️ Privilege status cleared');
+                  }}
+                  disabled={
+                    isWiping || isCheckingPrivileges || !privilegeStatus
+                  }
+                  className="danger"
+                  style={{ padding: '8px 12px' }}
+                >
+                  🗑️
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div
+                className="status-indicator status-info"
+                style={{ marginBottom: '16px' }}
+              >
+                🔄 Checking privilege requirements...
+              </div>
+              <button
+                onClick={handleManualPrivilegeCheck}
+                disabled={
+                  isWiping || isCheckingPrivileges || !targetPath.trim()
+                }
+                className="primary"
+                style={{ width: '100%' }}
+              >
+                {isCheckingPrivileges
+                  ? '🔄 Checking...'
+                  : '🔍 Force Check Privileges'}
+              </button>
+            </div>
+          )
+        ) : (
+          <div>
+            <div
+              style={{
+                marginTop: '16px',
+                marginBottom: '16px',
+                fontSize: '14px',
+                color: '#64748b',
+              }}
+            >
+              Enter a target path to check privilege requirements
+            </div>
+            <div
+              className="status-indicator status-info"
+              style={{ marginBottom: '16px' }}
+            >
+              ℹ️ <strong>Tip:</strong> Try different paths to see how privilege
+              requirements change:
+              <ul style={{ margin: '8px 0 0 16px', fontSize: '12px' }}>
+                <li>
+                  <code>/tmp/test-file</code> - Usually no privileges needed
+                </li>
+                <li>
+                  <code>/etc/test-file</code> - Requires admin privileges
+                </li>
+                <li>
+                  <code>/dev/sda</code> - Requires admin privileges (disk
+                  device)
+                </li>
+                <li>
+                  <code>C:\\Windows\\test.txt</code> - Windows admin required
+                </li>
+              </ul>
+            </div>
           </div>
         )}
       </div>
@@ -738,6 +1395,49 @@ export const SecureWipeDemo: React.FC = () => {
             disabled={isWiping}
           />
         </div>
+
+        {/* Privilege Escalation Options */}
+        <div style={{ marginTop: '24px', marginBottom: '16px' }}>
+          <div
+            className="form-label"
+            style={{ fontSize: '16px', fontWeight: 'bold' }}
+          >
+            Privilege Options
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label
+            className="form-label"
+            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            <input
+              type="checkbox"
+              checked={requestPrivileges}
+              onChange={(e) => setRequestPrivileges(e.target.checked)}
+              disabled={isWiping}
+            />
+            Request admin privileges automatically
+          </label>
+          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+            When enabled, the application will automatically request admin
+            privileges if needed. When disabled, operations requiring privileges
+            may fail.
+            {privilegeStatus?.needsElevation && (
+              <div
+                style={{
+                  marginTop: '4px',
+                  fontWeight: 'bold',
+                  color: requestPrivileges ? '#059669' : '#dc2626',
+                }}
+              >
+                {requestPrivileges
+                  ? `✅ Will request privileges using: ${privilegeStatus.method || 'system default'}`
+                  : `⚠️ Privileges required but automatic requests are disabled`}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Configuration Summary */}
@@ -776,6 +1476,24 @@ export const SecureWipeDemo: React.FC = () => {
             <div className="form-label">Demo Size</div>
             <div style={{ color: '#64748b' }}>{demoSize} MB</div>
           </div>
+          <div>
+            <div className="form-label">Request Privileges</div>
+            <div style={{ color: '#64748b' }}>
+              {requestPrivileges ? '✅ Enabled' : '❌ Disabled'}
+            </div>
+          </div>
+          <div>
+            <div className="form-label">Privilege Status</div>
+            <div style={{ color: '#64748b' }}>
+              {!targetPath.trim()
+                ? 'No target selected'
+                : !privilegeStatus
+                  ? 'Checking...'
+                  : privilegeStatus.needsElevation
+                    ? `⚠️ Admin required (${privilegeStatus.method})`
+                    : '✅ No elevation needed'}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -785,6 +1503,99 @@ export const SecureWipeDemo: React.FC = () => {
           <span className="card-icon">🚀</span>
           <h3 className="card-title">Actions</h3>
         </div>
+
+        {/* Privilege Tools Section */}
+        <div style={{ marginBottom: '24px' }}>
+          <div
+            style={{
+              fontSize: '14px',
+              fontWeight: 'bold',
+              marginBottom: '12px',
+              color: '#374151',
+            }}
+          >
+            🔐 Privilege Tools
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              onClick={handleManualPrivilegeCheck}
+              disabled={isWiping || isCheckingPrivileges || !targetPath.trim()}
+              className="primary"
+              style={{
+                fontSize: '12px',
+                padding: '6px 12px',
+                minWidth: '120px',
+              }}
+            >
+              {isCheckingPrivileges ? '🔄 Checking...' : '🔍 Check Privileges'}
+            </button>
+
+            <button
+              onClick={async () => {
+                try {
+                  addLog('🔧 Checking GUI prompt support...');
+                  const result =
+                    await window.electron.secureWipe.supportsGuiPrompts();
+                  if (result.success) {
+                    setSupportsGui(result.supportsGui || false);
+                    addLog(
+                      `GUI prompts: ${result.supportsGui ? '✅ Supported' : '❌ Console only'}`,
+                    );
+                  } else {
+                    addLog(`❌ Failed to check GUI support: ${result.error}`);
+                  }
+                } catch (error) {
+                  addLog(`❌ GUI support check error: ${error}`);
+                }
+              }}
+              disabled={isWiping || isCheckingPrivileges}
+              className="primary"
+              style={{
+                fontSize: '12px',
+                padding: '6px 12px',
+                minWidth: '120px',
+              }}
+            >
+              🖥️ Check GUI Support
+            </button>
+
+            <button
+              onClick={async () => {
+                try {
+                  addLog('🔧 Validating binary access...');
+                  const result =
+                    await window.electron.secureWipe.validateBinaryAccess();
+                  if (result.success) {
+                    addLog(`✅ Binary validation completed:`);
+                    addLog(
+                      `   Can execute: ${result.canExecute ? 'Yes' : 'No'}`,
+                    );
+                    addLog(
+                      `   Needs elevation: ${result.needsElevation ? 'Yes' : 'No'}`,
+                    );
+                    if (result.error) {
+                      addLog(`   Warning: ${result.error}`);
+                    }
+                  } else {
+                    addLog(`❌ Binary validation failed: ${result.error}`);
+                  }
+                } catch (error) {
+                  addLog(`❌ Binary validation error: ${error}`);
+                }
+              }}
+              disabled={isWiping || isCheckingPrivileges}
+              className="primary"
+              style={{
+                fontSize: '12px',
+                padding: '6px 12px',
+                minWidth: '120px',
+              }}
+            >
+              🔧 Validate Binary
+            </button>
+          </div>
+        </div>
+
         <div className="action-buttons">
           <button
             onClick={handleStartDemo}
@@ -800,7 +1611,32 @@ export const SecureWipeDemo: React.FC = () => {
             }
             className="primary"
           >
-            🔥 Start Wipe
+            🔥 Start Wipe (Basic)
+          </button>
+          <button
+            onClick={handleStartPrivilegeAwareWipe}
+            disabled={
+              isWiping ||
+              !targetPath ||
+              !binaryStatus?.binaryStatus?.exists ||
+              !privilegeStatus
+            }
+            className={privilegeStatus?.needsElevation ? 'danger' : 'primary'}
+            style={{ position: 'relative' }}
+          >
+            {privilegeStatus?.needsElevation && requestPrivileges ? '🔐' : '🔥'}{' '}
+            Start Wipe (Smart)
+            {privilegeStatus?.needsElevation && (
+              <span
+                style={{
+                  fontSize: '10px',
+                  marginLeft: '4px',
+                  opacity: 0.8,
+                }}
+              >
+                {requestPrivileges ? '(will request admin)' : '(may fail)'}
+              </span>
+            )}
           </button>
           {isWiping && (
             <button onClick={handleCancel} className="danger">
@@ -808,6 +1644,32 @@ export const SecureWipeDemo: React.FC = () => {
             </button>
           )}
         </div>
+
+        {/* Privilege Warning */}
+        {privilegeStatus?.needsElevation && !requestPrivileges && (
+          <div
+            className="status-indicator status-error"
+            style={{ marginTop: '16px' }}
+          >
+            ⚠️ <strong>Warning:</strong> Admin privileges are required for the
+            target path "{targetPath}", but automatic privilege requests are
+            disabled. The "Smart" wipe operation may fail unless you run this
+            application as administrator.
+          </div>
+        )}
+
+        {privilegeStatus?.needsElevation && requestPrivileges && (
+          <div
+            className="status-indicator status-info"
+            style={{ marginTop: '16px' }}
+          >
+            ℹ️ <strong>Info:</strong> The "Smart" wipe will automatically
+            request admin privileges using{' '}
+            {privilegeStatus.method || 'system default method'}.
+            {!supportsGui &&
+              ' Note: Console-based authentication will be used.'}
+          </div>
+        )}
       </div>
 
       {/* Progress Card */}
@@ -871,3 +1733,128 @@ export const SecureWipeDemo: React.FC = () => {
     </div>
   );
 };
+
+// Add CSS styles for privilege-related elements
+const privilegeStyles = `
+  .status-warning {
+    background-color: #fef3c7;
+    color: #92400e;
+    border: 1px solid #f59e0b;
+  }
+
+  .status-success {
+    background-color: #d1fae5;
+    color: #065f46;
+    border: 1px solid #10b981;
+  }
+
+  .status-error {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #ef4444;
+  }
+
+  .status-info {
+    background-color: #dbeafe;
+    color: #1e40af;
+    border: 1px solid #3b82f6;
+  }
+
+  .status-indicator {
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    display: inline-block;
+  }
+
+  .action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .action-buttons button {
+    width: 100%;
+    transition: all 0.2s ease;
+  }
+
+  .action-buttons button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .action-buttons button.danger {
+    background-color: #dc2626;
+    border-color: #dc2626;
+  }
+
+  .action-buttons button.danger:hover:not(:disabled) {
+    background-color: #b91c1c;
+    border-color: #b91c1c;
+  }
+
+  /* Privilege tools styling */
+  .privilege-tools {
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+  }
+
+  .privilege-tools button {
+    transition: all 0.2s ease;
+    border-radius: 6px;
+  }
+
+  .privilege-tools button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .privilege-tools button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  /* Status indicators with better visibility */
+  .privilege-status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .privilege-info-box {
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 12px;
+  }
+
+  .privilege-info-box code {
+    background-color: #e2e8f0;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 11px;
+  }
+
+  @media (min-width: 768px) {
+    .action-buttons {
+      flex-direction: row;
+    }
+  }
+`;
+
+// Inject styles into the document head
+if (
+  typeof document !== 'undefined' &&
+  !document.getElementById('privilege-styles')
+) {
+  const styleElement = document.createElement('style');
+  styleElement.id = 'privilege-styles';
+  styleElement.textContent = privilegeStyles;
+  document.head.appendChild(styleElement);
+}

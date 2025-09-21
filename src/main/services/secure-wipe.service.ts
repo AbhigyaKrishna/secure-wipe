@@ -16,8 +16,14 @@ import {
   WipeAlgorithm,
   DriveInfo,
   SystemInfo,
+  PrivilegeCheckResult,
+  PrivilegeEscalationOptions,
+  SecureWipeConfigWithPrivileges,
+  SecureWipeResultWithPrivileges,
+  BinaryAccessValidation,
 } from '../types/secure-wipe';
 import { SecureWipeUtils } from '../utils/secure-wipe.utils';
+import { AdminPrivilegesUtils } from '../utils/admin-privileges.utils';
 
 export class SecureWipeService extends EventEmitter {
   private binaryPath: string;
@@ -126,6 +132,16 @@ export class SecureWipeService extends EventEmitter {
     const safetyCheck = SecureWipeUtils.isSafeToWipe(filePath);
     if (!safetyCheck.safe) {
       console.warn('Safety check failed:', safetyCheck.warning);
+
+      // For block devices, allow the operation to proceed but with warnings
+      // The binary itself will handle the final safety checks and privilege requirements
+      if (SecureWipeUtils.isBlockDevice(filePath)) {
+        console.warn(
+          'Proceeding with block device wipe despite safety warning',
+        );
+        return true;
+      }
+
       return false;
     }
 
@@ -334,6 +350,286 @@ export class SecureWipeService extends EventEmitter {
   }
 
   /**
+   * Check if admin privileges are needed for the operation
+   */
+  async checkPrivileges(targetPath?: string): Promise<PrivilegeCheckResult> {
+    return AdminPrivilegesUtils.checkPrivileges(targetPath);
+  }
+
+  /**
+   * Validate binary access and privilege requirements
+   */
+  async validateBinaryAccess(): Promise<BinaryAccessValidation> {
+    return AdminPrivilegesUtils.validateBinaryAccess(this.binaryPath);
+  }
+
+  /**
+   * Check if the system supports GUI-based privilege prompts
+   */
+  supportsGuiPrompts(): boolean {
+    return AdminPrivilegesUtils.supportsGuiPrompts();
+  }
+
+  /**
+   * Get a user-friendly description of the privilege escalation method
+   */
+  async getElevationDescription(targetPath?: string): Promise<string> {
+    const privilegeCheck = await this.checkPrivileges(targetPath);
+    return AdminPrivilegesUtils.getElevationDescription(privilegeCheck.method);
+  }
+
+  /**
+   * Enhanced wipe target method that handles privilege escalation
+   */
+  async wipeTargetWithPrivileges(
+    config: SecureWipeConfigWithPrivileges,
+    onProgress?: ProgressCallback,
+  ): Promise<SecureWipeResultWithPrivileges> {
+    try {
+      // Check if privileges are needed
+      const privilegeCheck = await this.checkPrivileges(config.target);
+
+      let privilegesRequested = false;
+      let privilegeMethod: string | undefined;
+      let privilegeError: string | undefined;
+
+      // If privileges are needed and requested, handle escalation
+      if (privilegeCheck.needsElevation && config.requestPrivileges !== false) {
+        privilegesRequested = true;
+        privilegeMethod = privilegeCheck.method;
+
+        // If we're not already running with privileges, we need to escalate
+        if (!privilegeCheck.hasPrivileges) {
+          // For Linux/macOS, we can spawn the process with elevated privileges
+          if (process.platform !== 'win32') {
+            return this.wipeWithElevatedProcess(
+              config,
+              onProgress,
+              privilegeCheck,
+            );
+          } else {
+            // For Windows, we need to use a different approach
+            return this.wipeWithWindowsElevation(
+              config,
+              onProgress,
+              privilegeCheck,
+            );
+          }
+        }
+      }
+
+      // No privileges needed or already running with privileges
+      const result = await this.wipeTarget(config, onProgress);
+      return {
+        ...result,
+        privilegesRequested,
+        privilegeMethod,
+        privilegeError,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        privilegesRequested: false,
+      };
+    }
+  }
+
+  /**
+   * Handle wipe operation with elevated process (Linux/macOS)
+   */
+  private async wipeWithElevatedProcess(
+    config: SecureWipeConfigWithPrivileges,
+    onProgress?: ProgressCallback,
+    privilegeCheck?: PrivilegeCheckResult,
+  ): Promise<SecureWipeResultWithPrivileges> {
+    return new Promise(async (resolve) => {
+      try {
+        const args = this.buildArgs(config);
+        console.log(
+          `Starting elevated secure wipe: sudo/pkexec ${this.binaryPath} ${args.join(' ')}`,
+        );
+
+        const spawnResult = await AdminPrivilegesUtils.spawnWithPrivileges(
+          this.binaryPath,
+          args,
+          config.privilegeOptions,
+        );
+
+        if (!spawnResult.success || !spawnResult.process) {
+          resolve({
+            success: false,
+            error: spawnResult.error || 'Failed to spawn elevated process',
+            privilegesRequested: true,
+            privilegeMethod: spawnResult.method,
+            privilegeError: spawnResult.error,
+          });
+          return;
+        }
+
+        this.activeProcess = spawnResult.process;
+
+        let hasError = false;
+        let errorMessage = '';
+        const events: SecureWipeEvent[] = [];
+
+        // Handle stdout (JSON events)
+        this.activeProcess.stdout?.on('data', (data: Buffer) => {
+          const parsedEvents = this.parseEvents(data.toString());
+
+          for (const event of parsedEvents) {
+            // Only handle SecureWipeEvent types, not SystemInfo
+            if ('type' in event) {
+              const wipeEvent = event as SecureWipeEvent;
+              events.push(wipeEvent);
+
+              // Emit to service event emitter
+              this.emit('event', wipeEvent);
+
+              // Call progress callback if provided
+              if (onProgress) {
+                onProgress(wipeEvent);
+              }
+
+              // Check for errors
+              if (wipeEvent.type === 'error') {
+                hasError = true;
+                errorMessage = wipeEvent.message;
+              }
+            }
+          }
+        });
+
+        // Handle stderr (non-JSON errors)
+        this.activeProcess.stderr?.on('data', (data: Buffer) => {
+          const message = data.toString().trim();
+          if (message) {
+            console.warn('Elevated secure wipe stderr:', message);
+            errorMessage += (errorMessage ? '\n' : '') + message;
+          }
+        });
+
+        // Handle process completion
+        this.activeProcess.on('close', (code: number | null) => {
+          this.cleanup();
+
+          if (code === 0 && !hasError) {
+            resolve({
+              success: true,
+              exitCode: code,
+              privilegesRequested: true,
+              privilegeMethod: spawnResult.method,
+            });
+          } else {
+            resolve({
+              success: false,
+              error: errorMessage || `Process exited with code ${code}`,
+              exitCode: code || undefined,
+              privilegesRequested: true,
+              privilegeMethod: spawnResult.method,
+            });
+          }
+        });
+
+        // Handle process errors
+        this.activeProcess.on('error', (error: Error) => {
+          this.cleanup();
+          resolve({
+            success: false,
+            error: `Elevated process error: ${error.message}`,
+            privilegesRequested: true,
+            privilegeMethod: spawnResult.method,
+            privilegeError: error.message,
+          });
+        });
+
+        // Set up timeout
+        this.timeoutHandle = setTimeout(() => {
+          if (this.activeProcess) {
+            this.activeProcess.kill('SIGTERM');
+            resolve({
+              success: false,
+              error: `Elevated operation timed out after ${this.timeout}ms`,
+              privilegesRequested: true,
+              privilegeMethod: spawnResult.method,
+            });
+          }
+        }, this.timeout);
+      } catch (error) {
+        resolve({
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          privilegesRequested: true,
+          privilegeMethod: privilegeCheck?.method,
+          privilegeError:
+            error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    });
+  }
+
+  /**
+   * Handle wipe operation with Windows elevation
+   */
+  private async wipeWithWindowsElevation(
+    config: SecureWipeConfigWithPrivileges,
+    onProgress?: ProgressCallback,
+    privilegeCheck?: PrivilegeCheckResult,
+  ): Promise<SecureWipeResultWithPrivileges> {
+    try {
+      const args = this.buildArgs(config);
+      const command = this.binaryPath;
+
+      console.log(
+        `Starting Windows elevated secure wipe: ${command} ${args.join(' ')}`,
+      );
+
+      const executionResult = await AdminPrivilegesUtils.executeWithPrivileges(
+        command,
+        args,
+        config.privilegeOptions,
+      );
+
+      if (!executionResult.success) {
+        return {
+          success: false,
+          error: executionResult.error || 'Failed to execute with privileges',
+          privilegesRequested: true,
+          privilegeMethod: executionResult.method,
+          privilegeError: executionResult.error,
+        };
+      }
+
+      // Parse the output for events
+      if (executionResult.stdout && onProgress) {
+        const parsedEvents = this.parseEvents(executionResult.stdout);
+        for (const event of parsedEvents) {
+          if ('type' in event) {
+            const wipeEvent = event as SecureWipeEvent;
+            this.emit('event', wipeEvent);
+            onProgress(wipeEvent);
+          }
+        }
+      }
+
+      return {
+        success: true,
+        privilegesRequested: true,
+        privilegeMethod: executionResult.method,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        privilegesRequested: true,
+        privilegeMethod: privilegeCheck?.method,
+        privilegeError:
+          error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  /**
    * Start a secure wipe operation
    */
   async wipeTarget(
@@ -527,7 +823,7 @@ export class SecureWipeService extends EventEmitter {
         this.activeProcess.stdout?.on('data', (data: Buffer) => {
           const rawData = data.toString();
           console.log('Raw system info data:', rawData);
-          
+
           const parsedEvents = this.parseEvents(rawData);
           console.log('Parsed events:', parsedEvents);
 

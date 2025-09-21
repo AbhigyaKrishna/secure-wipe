@@ -164,3 +164,49 @@ export interface SecureWipeServiceOptions {
   binaryPath?: string; // Path to the secure-wipe binary
   timeout?: number; // Operation timeout in milliseconds
 }
+
+// Privilege check result interface
+export interface PrivilegeCheckResult {
+  hasPrivileges: boolean;
+  needsElevation: boolean;
+  currentUser: string;
+  isRoot: boolean;
+  platform: string;
+  method?: 'sudo' | 'pkexec' | 'runas' | 'none';
+}
+
+// Privilege escalation options
+export interface PrivilegeEscalationOptions {
+  name: string; // Application name for the privilege prompt
+  icns?: string; // Path to icon file (macOS)
+  windowsHide?: boolean; // Hide command window on Windows
+}
+
+// Privilege escalation result
+export interface PrivilegeEscalationResult {
+  success: boolean;
+  error?: string;
+  method?: string;
+  stdout?: string;
+  stderr?: string;
+}
+
+// Binary access validation result
+export interface BinaryAccessValidation {
+  canExecute: boolean;
+  needsElevation: boolean;
+  error?: string;
+}
+
+// Enhanced secure wipe config with privilege options
+export interface SecureWipeConfigWithPrivileges extends SecureWipeConfig {
+  requestPrivileges?: boolean; // Whether to request admin privileges
+  privilegeOptions?: Partial<PrivilegeEscalationOptions>; // Options for privilege escalation
+}
+
+// Enhanced secure wipe result with privilege information
+export interface SecureWipeResultWithPrivileges extends SecureWipeResult {
+  privilegesRequested?: boolean; // Whether privileges were requested
+  privilegeMethod?: string; // Method used for privilege escalation
+  privilegeError?: string; // Error during privilege escalation
+}

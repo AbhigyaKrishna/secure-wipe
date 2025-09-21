@@ -15,7 +15,11 @@ import log from 'electron-log';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import { secureWipeService } from './services/secure-wipe.service';
-import { SecureWipeConfig, SecureWipeEvent } from './types/secure-wipe';
+import {
+  SecureWipeConfig,
+  SecureWipeEvent,
+  SecureWipeConfigWithPrivileges,
+} from './types/secure-wipe';
 import { apiService } from './services/api.service';
 
 // Initialize API service
@@ -143,6 +147,102 @@ ipcMain.handle('secure-wipe:get-system-info', async () => {
     };
   }
 });
+
+// New privilege-related IPC handlers
+ipcMain.handle(
+  'secure-wipe:check-privileges',
+  async (event, targetPath?: string) => {
+    try {
+      const privilegeCheck =
+        await secureWipeService.checkPrivileges(targetPath);
+      return {
+        success: true,
+        ...privilegeCheck,
+      };
+    } catch (error) {
+      console.error('Check privileges error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  },
+);
+
+ipcMain.handle('secure-wipe:validate-binary-access', async () => {
+  try {
+    const validation = await secureWipeService.validateBinaryAccess();
+    return {
+      success: true,
+      ...validation,
+    };
+  } catch (error) {
+    console.error('Validate binary access error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+});
+
+ipcMain.handle('secure-wipe:supports-gui-prompts', () => {
+  try {
+    const supportsGui = secureWipeService.supportsGuiPrompts();
+    return {
+      success: true,
+      supportsGui,
+    };
+  } catch (error) {
+    console.error('Check GUI prompts support error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+});
+
+ipcMain.handle(
+  'secure-wipe:get-elevation-description',
+  async (event, targetPath?: string) => {
+    try {
+      const description =
+        await secureWipeService.getElevationDescription(targetPath);
+      return {
+        success: true,
+        description,
+      };
+    } catch (error) {
+      console.error('Get elevation description error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  },
+);
+
+ipcMain.handle(
+  'secure-wipe:wipe-with-privileges',
+  async (event, config: SecureWipeConfigWithPrivileges) => {
+    try {
+      const result = await secureWipeService.wipeTargetWithPrivileges(
+        config,
+        (wipeEvent: SecureWipeEvent) => {
+          // Send progress events to renderer
+          event.sender.send('secure-wipe:progress', wipeEvent);
+        },
+      );
+      return result;
+    } catch (error) {
+      console.error('Secure wipe with privileges error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        privilegesRequested: false,
+      };
+    }
+  },
+);
 
 if (process.env.NODE_ENV === 'production') {
   const sourceMapSupport = require('source-map-support');
