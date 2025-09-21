@@ -106,6 +106,7 @@ export const SecureWipeDemo: React.FC = () => {
     null,
   );
   const [log, setLog] = useState<string[]>([]);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   const addLog = useCallback((message: string) => {
     setLog((prev) => [
@@ -226,13 +227,24 @@ export const SecureWipeDemo: React.FC = () => {
               `Wiping completed in ${event.total_time_seconds.toFixed(1)}s (${event.average_throughput_mb_s.toFixed(2)} MB/s)`,
             );
             setIsWiping(false);
+            setIsCancelling(false);
             break;
           case 'error':
             addLog(`Error: ${event.message}`);
             setIsWiping(false);
+            setIsCancelling(false);
             break;
           case 'info':
             addLog(`Info: ${event.message}`);
+            // Check if this is a cancellation event
+            if (
+              event.message &&
+              event.message.toLowerCase().includes('cancel')
+            ) {
+              setIsWiping(false);
+              setProgress(null);
+              setIsCancelling(false);
+            }
             break;
           case 'demo_file_created':
             addLog(`Demo file created: ${event.path} (${event.size_mb} MB)`);
@@ -390,13 +402,29 @@ export const SecureWipeDemo: React.FC = () => {
   };
 
   const handleCancel = async () => {
+    setIsCancelling(true);
     try {
-      addLog('Cancelling operation...');
-      await window.electron.secureWipe.cancel();
+      addLog('🛑 Cancelling operation...');
+
+      const result = await window.electron.secureWipe.cancel();
+
+      if (result.success) {
+        addLog('✅ Operation cancelled successfully');
+        setIsWiping(false);
+        setProgress(null);
+      } else {
+        addLog(`❌ Cancel failed: ${result.error || 'Unknown error'}`);
+        // Still try to update UI state even if cancel failed
+        setIsWiping(false);
+        setProgress(null);
+      }
+    } catch (error) {
+      addLog(`❌ Cancel error: ${error}`);
+      // Force update UI state on error
       setIsWiping(false);
       setProgress(null);
-    } catch (error) {
-      addLog(`Cancel error: ${error}`);
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -1639,8 +1667,16 @@ export const SecureWipeDemo: React.FC = () => {
             )}
           </button>
           {isWiping && (
-            <button onClick={handleCancel} className="danger">
-              ⏹️ Cancel
+            <button
+              onClick={handleCancel}
+              className="danger"
+              disabled={isCancelling}
+              style={{
+                position: 'relative',
+                opacity: isCancelling ? 0.7 : 1,
+              }}
+            >
+              {isCancelling ? '⏳ Cancelling...' : '⏹️ Cancel'}
             </button>
           )}
         </div>

@@ -898,7 +898,27 @@ export class SecureWipeService extends EventEmitter {
   cancel(): void {
     if (this.activeProcess) {
       console.log('Cancelling secure wipe operation');
+
+      // Emit a cancellation event for the UI
+      const cancelEvent = {
+        type: 'info' as const,
+        message: 'Operation cancelled by user',
+        timestamp: Date.now(),
+      };
+      this.emit('event', cancelEvent);
+
+      // Kill the process
       this.activeProcess.kill('SIGTERM');
+
+      // Set a timeout to force kill if SIGTERM doesn't work
+      setTimeout(() => {
+        if (this.activeProcess) {
+          console.log('Force killing secure wipe process with SIGKILL');
+          this.activeProcess.kill('SIGKILL');
+          this.cleanup(); // Make sure to cleanup after force kill
+        }
+      }, 2000); // 2 second timeout
+
       this.cleanup();
     }
   }
