@@ -81,11 +81,10 @@ ipcMain.handle('secure-wipe:cancel', async () => {
 
 ipcMain.handle('secure-wipe:check-binary', async () => {
   try {
-    const exists = await secureWipeService.checkBinary();
+    const binaryInfo = await secureWipeService.getBinaryInfo();
     return {
       success: true,
-      exists,
-      path: secureWipeService.getBinaryPath(),
+      ...binaryInfo,
     };
   } catch (error) {
     console.error('Check binary error:', error);
@@ -98,6 +97,24 @@ ipcMain.handle('secure-wipe:check-binary', async () => {
 
 ipcMain.handle('secure-wipe:is-active', () => {
   return secureWipeService.isActive();
+});
+
+ipcMain.handle('secure-wipe:find-binary', async () => {
+  try {
+    const found = await secureWipeService.findAndSetBinary();
+    const binaryInfo = await secureWipeService.getBinaryInfo();
+    return {
+      success: true,
+      found,
+      ...binaryInfo,
+    };
+  } catch (error) {
+    console.error('Find binary error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
 });
 
 if (process.env.NODE_ENV === 'production') {

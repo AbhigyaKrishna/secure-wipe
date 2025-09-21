@@ -179,7 +179,7 @@
     "appId": "org.erb.ElectronReact",
     "asar": true,
     "afterSign": ".erb/scripts/notarize.js",
-    "asarUnpack": "**\\*.{node,dll}",
+    "asarUnpack": "**\\*.{node,dll,exe}",
     "files": [
       "dist",
       "node_modules",

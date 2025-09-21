@@ -23,8 +23,16 @@ interface DriveListResult {
 
 interface BinaryCheckResult {
   success: boolean;
-  exists?: boolean;
-  path?: string;
+  binaryPath?: string;
+  platform?: string;
+  supportedPlatforms?: string[];
+  binaryStatus?: {
+    exists: boolean;
+    path: string;
+    platform: string;
+    isExecutable?: boolean;
+    error?: string;
+  };
   error?: string;
 }
 
@@ -55,10 +63,33 @@ export const SecureWipeDemo: React.FC = () => {
         const result =
           (await window.electron.secureWipe.checkBinary()) as BinaryCheckResult;
         setBinaryStatus(result);
-        if (result.success) {
+        if (result.success && result.binaryStatus) {
+          const status = result.binaryStatus.exists ? 'found' : 'not found';
+          const executable =
+            result.binaryStatus.isExecutable !== false
+              ? 'executable'
+              : 'not executable';
           addLog(
-            `Binary ${result.exists ? 'found' : 'not found'} at: ${result.path}`,
+            `Binary ${status} at: ${result.binaryStatus.path} (${executable})`,
           );
+          addLog(
+            `Platform: ${result.platform} (supported: ${result.supportedPlatforms?.join(', ')})`,
+          );
+
+          if (!result.binaryStatus.exists) {
+            addLog('Attempting to find binary...');
+            const findResult = await window.electron.secureWipe.findBinary();
+            if (findResult.success) {
+              setBinaryStatus(findResult);
+              if (findResult.found) {
+                addLog(
+                  `Binary found and updated: ${findResult.binaryStatus?.path}`,
+                );
+              } else {
+                addLog('Binary not found in any expected location');
+              }
+            }
+          }
         } else {
           addLog(`Binary check failed: ${result.error}`);
         }
@@ -69,8 +100,6 @@ export const SecureWipeDemo: React.FC = () => {
 
     checkBinary();
   }, [addLog]);
-
-  // Set up progress event listener
   useEffect(() => {
     const cleanup = window.electron.secureWipe.onProgress(
       (event: SecureWipeEvent) => {
@@ -250,8 +279,40 @@ export const SecureWipeDemo: React.FC = () => {
         <h3>Binary Status</h3>
         {binaryStatus ? (
           <div>
-            <p>Status: {binaryStatus.exists ? '✅ Found' : '❌ Not Found'}</p>
-            <p>Path: {binaryStatus.path}</p>
+            <p>
+              Status:{' '}
+              {binaryStatus.binaryStatus?.exists ? '✅ Found' : '❌ Not Found'}
+              {binaryStatus.binaryStatus?.isExecutable === false &&
+                ' (Not Executable)'}
+            </p>
+            <p>Path: {binaryStatus.binaryStatus?.path}</p>
+            <p>Platform: {binaryStatus.platform}</p>
+            <p>Supported: {binaryStatus.supportedPlatforms?.join(', ')}</p>
+            {binaryStatus.binaryStatus?.error && (
+              <p style={{ color: 'red' }}>
+                Error: {binaryStatus.binaryStatus.error}
+              </p>
+            )}
+            {!binaryStatus.binaryStatus?.exists && (
+              <button
+                onClick={async () => {
+                  addLog('Attempting to find binary...');
+                  const findResult =
+                    await window.electron.secureWipe.findBinary();
+                  if (findResult.success) {
+                    setBinaryStatus(findResult);
+                    if (findResult.found) {
+                      addLog(`Binary found: ${findResult.binaryStatus?.path}`);
+                    } else {
+                      addLog('Binary not found');
+                    }
+                  }
+                }}
+                disabled={isWiping}
+              >
+                🔍 Search for Binary
+              </button>
+            )}
           </div>
         ) : (
           <p>Checking...</p>
@@ -331,14 +392,16 @@ export const SecureWipeDemo: React.FC = () => {
         <h3>Actions</h3>
         <button
           onClick={handleStartDemo}
-          disabled={isWiping || !binaryStatus?.exists}
+          disabled={isWiping || !binaryStatus?.binaryStatus?.exists}
           style={{ marginRight: '10px' }}
         >
           Start Demo (Safe)
         </button>
         <button
           onClick={handleStartWipe}
-          disabled={isWiping || !targetPath || !binaryStatus?.exists}
+          disabled={
+            isWiping || !targetPath || !binaryStatus?.binaryStatus?.exists
+          }
           style={{ marginRight: '10px' }}
         >
           Start Wipe

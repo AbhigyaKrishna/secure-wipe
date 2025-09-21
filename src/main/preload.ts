@@ -27,6 +27,7 @@ const electronHandler = {
     listDrives: () => ipcRenderer.invoke('secure-wipe:list-drives'),
     cancel: () => ipcRenderer.invoke('secure-wipe:cancel'),
     checkBinary: () => ipcRenderer.invoke('secure-wipe:check-binary'),
+    findBinary: () => ipcRenderer.invoke('secure-wipe:find-binary'),
     isActive: () => ipcRenderer.invoke('secure-wipe:is-active'),
     onProgress: (callback: (event: any) => void) => {
       const subscription = (_event: IpcRendererEvent, event: any) =>

@@ -34,27 +34,80 @@ export class SecureWipeService extends EventEmitter {
 
   /**
    * Get the default path to the secure-wipe binary
+   * Supports both Windows (.exe) and Linux binaries bundled with the app
    */
   private getDefaultBinaryPath(): string {
     const platform = process.platform;
-    const binaryName =
-      platform === 'win32' ? 'secure-wipe-bin.exe' : 'secure-wipe-bin';
+    const binaryName = this.getBinaryNameForPlatform(platform);
 
-    // Try multiple possible locations
+    // Priority order for bundled Electron apps:
+    // 1. Production: process.resourcesPath/assets/
+    // 2. Development: relative to main process
+    // 3. Development: assets directory
+    // 4. Fallback: system PATH
     const possiblePaths = [
+      // Production bundled app - resources folder
+      ...(process.resourcesPath
+        ? [
+            path.join(process.resourcesPath, 'assets', binaryName),
+            path.join(process.resourcesPath, 'assets', 'bin', binaryName),
+          ]
+        : []),
+
+      // Development - relative to compiled main process
+      path.join(__dirname, '..', '..', '..', 'assets', binaryName),
+      path.join(__dirname, '..', '..', '..', 'assets', 'bin', binaryName),
+
+      // Alternative development paths
       path.join(__dirname, '..', '..', 'assets', binaryName),
-      path.join(process.resourcesPath || '', 'assets', binaryName),
+      path.join(__dirname, '..', '..', 'assets', 'bin', binaryName),
+
+      // Local bin directory
       path.join(__dirname, 'bin', binaryName),
-      binaryName, // Assume it's in PATH
+
+      // System PATH as last resort
+      binaryName,
     ];
 
     for (const binPath of possiblePaths) {
-      if (fs.existsSync(binPath)) {
-        return binPath;
+      try {
+        if (fs.existsSync(binPath)) {
+          const stats = fs.statSync(binPath);
+          if (stats.isFile()) {
+            console.log(`Found secure-wipe binary at: ${binPath}`);
+            return binPath;
+          }
+        }
+      } catch (error) {
+        // Continue to next path if this one fails
+        continue;
       }
     }
 
+    console.warn(`secure-wipe binary not found. Searched paths:`);
+    possiblePaths.forEach((p, i) => console.warn(`  ${i + 1}. ${p}`));
+    console.warn('Falling back to system PATH lookup');
+
     return binaryName; // Fallback to PATH lookup
+  }
+
+  /**
+   * Get the appropriate binary name for the current platform
+   */
+  private getBinaryNameForPlatform(platform: string): string {
+    switch (platform) {
+      case 'win32':
+        return 'secure-wipe-bin.exe';
+      case 'linux':
+        return 'secure-wipe-bin';
+      case 'darwin':
+        return 'secure-wipe-bin'; // macOS binary (if you add it later)
+      default:
+        console.warn(
+          `Unsupported platform: ${platform}. Using Linux binary name.`,
+        );
+        return 'secure-wipe-bin';
+    }
   }
 
   /**
@@ -344,13 +397,43 @@ export class SecureWipeService extends EventEmitter {
 
   /**
    * Check if the binary exists and is executable
+   * Returns detailed information about binary status
    */
-  async checkBinary(): Promise<boolean> {
+  async checkBinary(): Promise<{
+    exists: boolean;
+    path: string;
+    platform: string;
+    isExecutable?: boolean;
+    error?: string;
+  }> {
+    const platform = process.platform;
     try {
       const stats = await fs.promises.stat(this.binaryPath);
-      return stats.isFile();
-    } catch {
-      return false;
+      const exists = stats.isFile();
+
+      // Check if file is executable (Unix-like systems)
+      let isExecutable = true;
+      if (platform !== 'win32' && exists) {
+        try {
+          await fs.promises.access(this.binaryPath, fs.constants.X_OK);
+        } catch {
+          isExecutable = false;
+        }
+      }
+
+      return {
+        exists,
+        path: this.binaryPath,
+        platform,
+        isExecutable,
+      };
+    } catch (error) {
+      return {
+        exists: false,
+        path: this.binaryPath,
+        platform,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
     }
   }
 
@@ -373,6 +456,38 @@ export class SecureWipeService extends EventEmitter {
    */
   isActive(): boolean {
     return this.activeProcess !== null;
+  }
+
+  /**
+   * Get detailed information about the binary and platform
+   */
+  async getBinaryInfo(): Promise<{
+    binaryPath: string;
+    platform: string;
+    supportedPlatforms: string[];
+    binaryStatus: Awaited<ReturnType<SecureWipeService['checkBinary']>>;
+  }> {
+    const platform = process.platform;
+    const supportedPlatforms = ['win32', 'linux']; // Add 'darwin' when macOS binary is available
+    const binaryStatus = await this.checkBinary();
+
+    return {
+      binaryPath: this.binaryPath,
+      platform,
+      supportedPlatforms,
+      binaryStatus,
+    };
+  }
+
+  /**
+   * Attempt to find and set the binary for the current platform
+   */
+  async findAndSetBinary(): Promise<boolean> {
+    const newPath = this.getDefaultBinaryPath();
+    this.setBinaryPath(newPath);
+
+    const status = await this.checkBinary();
+    return status.exists && status.isExecutable !== false;
   }
 }
 
