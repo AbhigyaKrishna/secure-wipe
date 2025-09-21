@@ -14,6 +14,8 @@ import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
+import { secureWipeService } from './services/secure-wipe.service';
+import { SecureWipeConfig, SecureWipeEvent } from './types/secure-wipe';
 
 class AppUpdater {
   constructor() {
@@ -29,6 +31,73 @@ ipcMain.on('ipc-example', async (event, arg) => {
   const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
   console.log(msgTemplate(arg));
   event.reply('ipc-example', msgTemplate('pong'));
+});
+
+// Secure Wipe IPC handlers
+ipcMain.handle('secure-wipe:wipe', async (event, config: SecureWipeConfig) => {
+  try {
+    const result = await secureWipeService.wipeTarget(
+      config,
+      (wipeEvent: SecureWipeEvent) => {
+        // Send progress events to renderer
+        event.sender.send('secure-wipe:progress', wipeEvent);
+      },
+    );
+    return result;
+  } catch (error) {
+    console.error('Secure wipe error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+});
+
+ipcMain.handle('secure-wipe:list-drives', async () => {
+  try {
+    const drives = await secureWipeService.listDrives();
+    return { success: true, drives };
+  } catch (error) {
+    console.error('List drives error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+});
+
+ipcMain.handle('secure-wipe:cancel', async () => {
+  try {
+    secureWipeService.cancel();
+    return { success: true };
+  } catch (error) {
+    console.error('Cancel operation error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+});
+
+ipcMain.handle('secure-wipe:check-binary', async () => {
+  try {
+    const exists = await secureWipeService.checkBinary();
+    return {
+      success: true,
+      exists,
+      path: secureWipeService.getBinaryPath(),
+    };
+  } catch (error) {
+    console.error('Check binary error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+});
+
+ipcMain.handle('secure-wipe:is-active', () => {
+  return secureWipeService.isActive();
 });
 
 if (process.env.NODE_ENV === 'production') {
