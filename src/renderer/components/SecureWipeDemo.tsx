@@ -85,8 +85,18 @@ export default function SecureWipeDemo(): React.ReactElement {
       const result: SystemInfoResult = await window.electron.secureWipe.getSystemInfo();
       if (result.success && result.systemInfo) {
         setSystemInfo(result.systemInfo);
-        setSupportsGui(result.systemInfo.supportsGuiPrompts || false);
         addLog(`✅ System info loaded: ${result.systemInfo.os_name} ${result.systemInfo.architecture}`);
+        
+        // Check GUI prompts support
+        try {
+          const guiResult = await window.electron.secureWipe.supportsGuiPrompts();
+          if (guiResult.success) {
+            setSupportsGui(guiResult.supportsGui || false);
+            addLog(`GUI privilege prompts: ${guiResult.supportsGui ? 'Supported' : 'Not supported'}`);
+          }
+        } catch (error) {
+          addLog(`Failed to check GUI support: ${error}`);
+        }
         
         // Extract drives from system info as backup
         if (result.systemInfo.storage_devices && result.systemInfo.storage_devices.length > 0) {
@@ -200,7 +210,7 @@ export default function SecureWipeDemo(): React.ReactElement {
     } finally {
       setIsCheckingPrivileges(false);
     }
-  }, [supportsGui]);
+  }, []);
 
   // Initialize system
   useEffect(() => {
@@ -329,18 +339,22 @@ export default function SecureWipeDemo(): React.ReactElement {
 
     const config: SecureWipeConfig = {
       target: `demo-${Date.now()}.tmp`,
-      algorithm: 'random',
-      bufferSize: 8, // Very small buffer for much slower progress
+      algorithm,
+      bufferSize: Math.max(bufferSize, 64), // Ensure reasonable buffer size
       demo: true,
-      demoSize: Math.max(demoSize, 500), // Minimum 500MB for very long demo
-      passes: 1,
+      demoSize: Math.max(demoSize, 10), // Use configured demo size
+      passes: useCustomPasses ? customPasses : undefined,
     };
+
+    addLog(`Demo configuration: ${JSON.stringify(config, null, 2)}`);
 
     try {
       const result: SecureWipeResult = await window.electron.secureWipe.wipe(config);
       if (!result.success) {
         addLog(`❌ Demo failed: ${result.error}`);
         setIsWiping(false);
+      } else {
+        addLog('✅ Demo wipe completed successfully');
       }
     } catch (error) {
       addLog(`❌ Demo error: ${error}`);
@@ -359,7 +373,7 @@ export default function SecureWipeDemo(): React.ReactElement {
     addLog(`🔥 Starting wipe: ${targetPath}`);
 
     // For Windows drives, keep the full device path format
-    let formattedTarget = targetPath;
+    let formattedTarget = targetPath.trim();
     addLog(`📝 Using target path: ${formattedTarget}`);
 
     // Check if this is a device path and warn user
@@ -376,43 +390,58 @@ export default function SecureWipeDemo(): React.ReactElement {
     };
 
     try {
-      // Always use privilege-aware wipe for better handling
-      addLog(`🔐 Using privilege-aware wipe with automatic privilege detection`);
-      
-      if (privilegeStatus?.needsElevation && requestPrivileges) {
-        addLog('⚠️ Admin privileges will be requested');
-        if (elevationDescription) {
-          addLog(`   ${elevationDescription}`);
+      // Check if we should use privilege-aware wipe
+      if (privilegeStatus?.needsElevation || requestPrivileges) {
+        addLog(`🔐 Using privilege-aware wipe with automatic privilege detection`);
+        
+        if (privilegeStatus?.needsElevation && requestPrivileges) {
+          addLog('⚠️ Admin privileges will be requested');
+          if (elevationDescription) {
+            addLog(`   ${elevationDescription}`);
+          }
+          if (!supportsGui) {
+            addLog('   Note: Console-based privilege prompt (no GUI)');
+          }
         }
-        if (!supportsGui) {
-          addLog('   Note: Console-based privilege prompt (no GUI)');
-        }
-      }
-      
-      const privilegeConfig = {
-        ...config,
-        requestPrivileges: requestPrivileges || privilegeStatus?.needsElevation || false,
-        privilegeOptions: {
-          name: 'Secure Wipe',
-          windowsHide: true,
-        },
-      };
-      
-      addLog(`Configuration: ${JSON.stringify(privilegeConfig, null, 2)}`);
-      
-      const result = await window.electron.secureWipe.wipeWithPrivileges(privilegeConfig);
-      
-      if (result.success) {
-        addLog('✅ Privilege-aware wipe completed successfully!');
-        if ((result as any).privilegesRequested) {
-          addLog(`   Privileges were requested using: ${(result as any).privilegeMethod}`);
+        
+        const privilegeConfig = {
+          ...config,
+          requestPrivileges: requestPrivileges,
+          privilegeOptions: {
+            name: 'Secure Wipe',
+            windowsHide: true,
+          },
+        };
+        
+        addLog(`Privilege-aware configuration: ${JSON.stringify(privilegeConfig, null, 2)}`);
+        
+        const result = await window.electron.secureWipe.wipeWithPrivileges(privilegeConfig);
+        
+        if (result.success) {
+          addLog('✅ Privilege-aware wipe completed successfully!');
+          if ((result as any).privilegesRequested) {
+            addLog(`   Privileges were requested using: ${(result as any).privilegeMethod}`);
+          }
+        } else {
+          addLog(`❌ Privilege-aware wipe failed: ${result.error}`);
+          if ((result as any).privilegeError) {
+            addLog(`   Privilege error: ${(result as any).privilegeError}`);
+          }
+          setIsWiping(false);
         }
       } else {
-        addLog(`❌ Privilege-aware wipe failed: ${result.error}`);
-        if ((result as any).privilegeError) {
-          addLog(`   Privilege error: ${(result as any).privilegeError}`);
+        // Use regular wipe without privilege escalation
+        addLog(`🔥 Using standard wipe (no privilege escalation needed)`);
+        addLog(`Configuration: ${JSON.stringify(config, null, 2)}`);
+        
+        const result: SecureWipeResult = await window.electron.secureWipe.wipe(config);
+        
+        if (result.success) {
+          addLog('✅ Wipe completed successfully!');
+        } else {
+          addLog(`❌ Wipe failed: ${result.error}`);
+          setIsWiping(false);
         }
-        setIsWiping(false);
       }
     } catch (error) {
       addLog(`❌ Wipe error: ${error}`);
@@ -444,24 +473,54 @@ export default function SecureWipeDemo(): React.ReactElement {
   useEffect(() => {
     const handleProgress = (event: SecureWipeEvent) => {
       setProgress(event);
-      if (event.type === 'complete') {
-        setIsWiping(false);
-        addLog('✅ Wipe completed successfully');
-      } else if (event.type === 'error') {
-        setIsWiping(false);
-        addLog(`❌ Wipe failed: ${(event as any).message}`);
-      } else if (event.type === 'progress') {
-        addLog(`📊 Progress: ${(event as any).percent}% - Pass ${(event as any).pass}/${(event as any).total_passes}`);
-      } else if (event.type === 'demo_file_creating') {
-        addLog(`📁 Creating demo file: ${Math.round((event as any).percent)}% complete`);
-      } else if (event.type === 'demo_file_created') {
-        addLog(`✅ Demo file created: ${(event as any).size_mb}MB`);
-      } else if (event.type === 'start') {
-        addLog(`🚀 Starting ${(event as any).algorithm} algorithm (${(event as any).total_passes} pass${(event as any).total_passes > 1 ? 'es' : ''})`);
-      } else if (event.type === 'pass_start') {
-        addLog(`🔄 Pass ${(event as any).pass}/${(event as any).total_passes} started - Pattern: ${(event as any).pattern}`);
-      } else if (event.type === 'pass_complete') {
-        addLog(`✅ Pass ${(event as any).pass}/${(event as any).total_passes} completed`);
+      
+      // Handle different event types
+      switch (event.type) {
+        case 'complete':
+          setIsWiping(false);
+          addLog('✅ Wipe completed successfully');
+          addLog(`Total time: ${(event as any).total_time_seconds}s, Average throughput: ${(event as any).average_throughput_mb_s} MB/s`);
+          break;
+          
+        case 'error':
+          setIsWiping(false);
+          addLog(`❌ Wipe failed: ${(event as any).message}`);
+          break;
+          
+        case 'progress':
+          const progressEvent = event as any;
+          addLog(`📊 Progress: ${progressEvent.percent}% - Pass ${progressEvent.pass}/${progressEvent.total_passes} (${(progressEvent.bytes_per_second / 1024 / 1024).toFixed(2)} MB/s)`);
+          break;
+          
+        case 'demo_file_creating':
+          addLog(`📁 Creating demo file: ${Math.round((event as any).percent)}% complete`);
+          break;
+          
+        case 'demo_file_created':
+          addLog(`✅ Demo file created: ${(event as any).size_mb}MB at ${(event as any).path}`);
+          break;
+          
+        case 'start':
+          const startEvent = event as any;
+          addLog(`🚀 Starting ${startEvent.algorithm} algorithm (${startEvent.total_passes} pass${startEvent.total_passes > 1 ? 'es' : ''})`);
+          addLog(`File size: ${(startEvent.file_size_bytes / 1024 / 1024).toFixed(2)} MB, Buffer size: ${startEvent.buffer_size_kb} KB`);
+          break;
+          
+        case 'pass_start':
+          addLog(`🔄 Pass ${(event as any).pass}/${(event as any).total_passes} started - Pattern: ${(event as any).pattern}`);
+          break;
+          
+        case 'pass_complete':
+          addLog(`✅ Pass ${(event as any).pass}/${(event as any).total_passes} completed`);
+          break;
+          
+        case 'info':
+          addLog(`ℹ️ ${(event as any).message}`);
+          break;
+          
+        default:
+          // Log any other event types for debugging
+          addLog(`🔧 ${event.type}: ${JSON.stringify(event)}`);
       }
     };
 
@@ -925,7 +984,10 @@ export default function SecureWipeDemo(): React.ReactElement {
                   <span className="info-label">Binary Status</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span className={`info-value ${binaryStatus?.binaryStatus?.exists ? 'success' : 'error'}`}>
-                      {binaryStatus?.binaryStatus?.exists ? 'Ready' : 'Not Found'}
+                      {binaryStatus?.binaryStatus?.exists ? 
+                        (binaryStatus.binaryStatus.isExecutable !== false ? 'Ready' : 'Not Executable') 
+                        : 'Not Found'
+                      }
                     </span>
                     {!binaryStatus?.binaryStatus?.exists && (
                       <button 
@@ -938,6 +1000,14 @@ export default function SecureWipeDemo(): React.ReactElement {
                     )}
                   </div>
                 </div>
+                {binaryStatus?.binaryStatus?.exists && (
+                  <div className="info-row">
+                    <span className="info-label">Binary Path</span>
+                    <span className="info-value" style={{ fontSize: '0.75rem', fontFamily: 'monospace' }}>
+                      {binaryStatus.binaryStatus.path}
+                    </span>
+                  </div>
+                )}
                 <div className="info-row">
                   <span className="info-label">Available Drives</span>
                   <span className="info-value">{drives.length} detected</span>
@@ -1035,32 +1105,117 @@ export default function SecureWipeDemo(): React.ReactElement {
                   value={demoSize}
                   onChange={(e) => setDemoSize(parseInt(e.target.value) || 10)}
                   min="1"
-                  max="100"
+                  max="1000"
                   disabled={isWiping}
                 />
                 <small style={{ color: '#6b7280', fontSize: '0.75rem' }}>
                   Size of temporary file created for safe testing
                 </small>
               </div>
+              
+              <div className="form-group">
+                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={useCustomPasses}
+                    onChange={(e) => setUseCustomPasses(e.target.checked)}
+                    style={{ marginRight: '8px' }}
+                    disabled={isWiping}
+                  />
+                  <span style={{ fontSize: '0.875rem' }}>Use custom number of passes</span>
+                </label>
+                {useCustomPasses && (
+                  <input
+                    type="number"
+                    className="form-input"
+                    value={customPasses}
+                    onChange={(e) => setCustomPasses(parseInt(e.target.value) || 1)}
+                    min="1"
+                    max="100"
+                    disabled={isWiping}
+                    style={{ marginTop: '8px' }}
+                    placeholder="Number of passes"
+                  />
+                )}
+                <small style={{ color: '#6b7280', fontSize: '0.75rem' }}>
+                  Override algorithm default with custom pass count
+                </small>
+              </div>
             </div>
 
-            {privilegeStatus?.needsElevation && (
+            {/* Privilege Status Card */}
+            {privilegeStatus && (
               <div className="card">
-                <h3 className="card-title">Administrator Privileges Required</h3>
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={requestPrivileges}
-                      onChange={(e) => setRequestPrivileges(e.target.checked)}
-                      style={{ marginRight: '8px' }}
-                    />
-                    <span style={{ fontSize: '0.875rem' }}>Automatically request admin privileges</span>
-                  </label>
+                <h3 className="card-title">Privilege Status</h3>
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.875rem' }}>
+                    <div>
+                      <span style={{ color: '#6b7280', fontWeight: '500' }}>Current User:</span>
+                      <div style={{ fontWeight: '600' }}>{privilegeStatus.currentUser}</div>
+                    </div>
+                    <div>
+                      <span style={{ color: '#6b7280', fontWeight: '500' }}>User Type:</span>
+                      <div style={{ fontWeight: '600', color: privilegeStatus.isRoot ? '#059669' : '#3b82f6' }}>
+                        {privilegeStatus.isRoot ? '👑 Administrator' : '👤 Regular User'}
+                      </div>
+                    </div>
+                    <div>
+                      <span style={{ color: '#6b7280', fontWeight: '500' }}>Has Privileges:</span>
+                      <div style={{ fontWeight: '600', color: privilegeStatus.hasPrivileges ? '#059669' : '#dc2626' }}>
+                        {privilegeStatus.hasPrivileges ? '✅ Yes' : '⚠️ No'}
+                      </div>
+                    </div>
+                    <div>
+                      <span style={{ color: '#6b7280', fontWeight: '500' }}>Needs Elevation:</span>
+                      <div style={{ fontWeight: '600', color: privilegeStatus.needsElevation ? '#dc2626' : '#059669' }}>
+                        {privilegeStatus.needsElevation ? '⚠️ Yes' : '✅ No'}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {privilegeStatus.needsElevation && (
+                    <div style={{ marginTop: '16px' }}>
+                      <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '6px', padding: '12px', marginBottom: '12px' }}>
+                        <div style={{ color: '#92400e', fontSize: '0.875rem', fontWeight: '600', marginBottom: '4px' }}>
+                          ⚠️ Administrator Privileges Required
+                        </div>
+                        <div style={{ color: '#92400e', fontSize: '0.75rem' }}>
+                          This operation requires administrator privileges to access the selected target.
+                          {elevationDescription && (
+                            <>
+                              <br />
+                              <strong>Elevation method:</strong> {elevationDescription}
+                            </>
+                          )}
+                        </div>
+                        {!supportsGui && (
+                          <div style={{ color: '#92400e', fontSize: '0.75rem', marginTop: '4px', fontStyle: 'italic' }}>
+                            Note: Your system will use console-based authentication (no graphical dialog).
+                          </div>
+                        )}
+                      </div>
+                      
+                      <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={requestPrivileges}
+                          onChange={(e) => setRequestPrivileges(e.target.checked)}
+                          style={{ marginRight: '8px' }}
+                        />
+                        <span style={{ fontSize: '0.875rem' }}>Automatically request admin privileges</span>
+                      </label>
+                    </div>
+                  )}
                 </div>
-                <small style={{ color: '#dc2626', fontSize: '0.75rem', display: 'block' }}>
-                  ⚠️ This operation requires administrator privileges to access the selected target.
-                </small>
+              </div>
+            )}
+            
+            {isCheckingPrivileges && (
+              <div className="card">
+                <h3 className="card-title">Checking Privileges...</h3>
+                <div style={{ padding: '20px', textAlign: 'center', color: '#6b7280' }}>
+                  🔄 Analyzing privilege requirements for target path...
+                </div>
               </div>
             )}
 
