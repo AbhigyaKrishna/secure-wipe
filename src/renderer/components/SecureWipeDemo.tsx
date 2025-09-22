@@ -100,6 +100,7 @@ export default function SecureWipeDemo(): React.ReactElement {
   const [logs, setLogs] = useState<string[]>([]);
   const [binaryAnimation, setBinaryAnimation] = useState<string>('');
   const [animationPhase, setAnimationPhase] = useState<string>('');
+  const [isDeletionPhase, setIsDeletionPhase] = useState<boolean>(false);
 
   // System state
   const [drives, setDrives] = useState<DriveInfo[]>([]);
@@ -321,31 +322,29 @@ export default function SecureWipeDemo(): React.ReactElement {
     if (!isWiping) {
       setBinaryAnimation('');
       setAnimationPhase('');
+      setIsDeletionPhase(false);
       return;
     }
 
     let currentPhase = 0; // 0: original data, 1: random overwrite, 2: zeros, 3: ones, 4: final zeros
     let frameCount = 0;
-    const FRAMES_PER_PHASE = 80; // Longer phases for better visibility
-    const BINARY_LENGTH = 96; // Optimized length for better display
+    const FRAMES_PER_PHASE = 60; // Optimized for better visibility
+    const BINARY_LENGTH = 120; // Longer length for better effect
 
     const phaseDescriptions = [
       '🔍 Scanning original data patterns...',
       '🎲 Overwriting with cryptographic random data...',
-      '⚡ Converting all bits to zeros...',
-      '🔄 Writing ones pattern for verification...',
+      '⚡ Converting all bits to zeros (SECURE DELETION)...',
+      '🔄 Writing verification pattern...',
       '✅ Final zero pass - Data permanently destroyed!',
     ];
 
-    // Generate initial "data" pattern
+    // Generate initial "data" pattern that looks more realistic
     const originalData = Array.from({ length: BINARY_LENGTH }, (_, i) => {
-      // Create a pattern that looks like real data
+      // Create varied patterns that simulate real file data
       const patterns = [
-        '10110100',
-        '01001011',
-        '11010010',
-        '00101101',
-        '10011010',
+        '10110100', '01001011', '11010010', '00101101', '10011010',
+        '11100011', '00110110', '10101010', '01010101', '11111000'
       ];
       return patterns[i % patterns.length][i % 8];
     }).join('');
@@ -358,58 +357,106 @@ export default function SecureWipeDemo(): React.ReactElement {
       setAnimationPhase(phaseDescriptions[currentPhase] || 'Processing...');
 
       switch (currentPhase) {
-        case 0: // Show original data
-          currentBinary = originalData;
+        case 0: // Show original data with some flickering
+          if (frameCount < 5) {
+            // Initial stable display
+            currentBinary = originalData;
+          } else {
+            // Add some flickering to simulate reading
+            currentBinary = Array.from(originalData, (bit, i) => {
+              if (Math.random() < 0.05) { // 5% chance to flicker
+                return Math.random() > 0.5 ? '1' : '0';
+              }
+              return bit;
+            }).join('');
+          }
+          
           if (frameCount >= FRAMES_PER_PHASE) {
             currentPhase = 1;
             frameCount = 0;
           }
           break;
 
-        case 1: // Random overwrite phase (simulating secure deletion)
+        case 1: // Random overwrite phase - more chaotic
           currentBinary = Array.from({ length: BINARY_LENGTH }, () =>
             Math.random() > 0.5 ? '1' : '0',
           ).join('');
-          if (frameCount >= FRAMES_PER_PHASE * 3) {
-            // Much longer random phase
+          
+          if (frameCount >= FRAMES_PER_PHASE * 2) {
             currentPhase = 2;
             frameCount = 0;
           }
           break;
 
-        case 2: // Gradual conversion to zeros
-          const zerosProgress = Math.min(frameCount / FRAMES_PER_PHASE, 1);
+        case 2: // Gradual conversion to zeros - THE MAIN DELETION EFFECT
+          setIsDeletionPhase(true); // Activate deletion visual mode
+          const zerosProgress = Math.min(frameCount / (FRAMES_PER_PHASE * 2), 1);
           const zerosCount = Math.floor(BINARY_LENGTH * zerosProgress);
-          currentBinary =
-            '0'.repeat(zerosCount) +
-            Array.from({ length: BINARY_LENGTH - zerosCount }, () =>
-              Math.random() > 0.7 ? '1' : '0',
-            ).join('');
-          if (frameCount >= FRAMES_PER_PHASE) {
+          
+          // Create a dramatic wave effect of zeros spreading from left to right
+          let tempBinary = '';
+          for (let i = 0; i < BINARY_LENGTH; i++) {
+            if (i < zerosCount) {
+              tempBinary += '0'; // Already converted to zero - DATA DESTROYED
+            } else if (i < zerosCount + 8) {
+              // Transition zone - more dramatic flickering
+              if (Math.random() < 0.8) {
+                tempBinary += '0'; // Bias towards zeros in transition
+              } else {
+                tempBinary += Math.random() > 0.5 ? '1' : '0';
+              }
+            } else if (i < zerosCount + 15) {
+              // Secondary transition zone - less stable
+              tempBinary += Math.random() < 0.6 ? '0' : (Math.random() > 0.5 ? '1' : '0');
+            } else {
+              // Not yet reached - chaotic data
+              tempBinary += Math.random() > 0.5 ? '1' : '0';
+            }
+          }
+          currentBinary = tempBinary;
+          
+          // Update phase description with progress
+          if (zerosProgress > 0.1) {
+            const progressPercent = Math.floor(zerosProgress * 100);
+            setAnimationPhase(`⚡ SECURE DELETION IN PROGRESS: ${progressPercent}% converted to zeros...`);
+          }
+          
+          if (frameCount >= FRAMES_PER_PHASE * 2) {
+            setIsDeletionPhase(false); // Exit deletion visual mode
             currentPhase = 3;
             frameCount = 0;
           }
           break;
 
-        case 3: // Ones phase
-          currentBinary = '1'.repeat(BINARY_LENGTH);
+        case 3: // Verification phase - brief ones pattern
+          const onesProgress = Math.min(frameCount / FRAMES_PER_PHASE, 1);
+          const onesCount = Math.floor(BINARY_LENGTH * onesProgress);
+          currentBinary = '1'.repeat(onesCount) + '0'.repeat(BINARY_LENGTH - onesCount);
+          
           if (frameCount >= FRAMES_PER_PHASE) {
-            // Full ones phase
             currentPhase = 4;
             frameCount = 0;
           }
           break;
 
-        case 4: // Final zeros with completion effect
+        case 4: // Final zeros with dramatic effect
           const finalProgress = Math.min(frameCount / FRAMES_PER_PHASE, 1);
-          const finalZerosCount = Math.floor(BINARY_LENGTH * finalProgress);
-          currentBinary =
-            '0'.repeat(finalZerosCount) +
-            '1'.repeat(BINARY_LENGTH - finalZerosCount);
-          if (frameCount >= FRAMES_PER_PHASE) {
-            // Reset for continuous loop
-            currentPhase = 0;
-            frameCount = 0;
+          
+          if (finalProgress < 0.8) {
+            // Quick conversion from ones to zeros
+            const finalZerosCount = Math.floor(BINARY_LENGTH * (finalProgress / 0.8));
+            currentBinary = '0'.repeat(finalZerosCount) + '1'.repeat(BINARY_LENGTH - finalZerosCount);
+          } else {
+            // Final stable zeros - data is destroyed
+            currentBinary = '0'.repeat(BINARY_LENGTH);
+          }
+          
+          if (frameCount >= FRAMES_PER_PHASE * 1.5) {
+            // Hold the final zeros state longer, then restart
+            if (frameCount >= FRAMES_PER_PHASE * 3) {
+              currentPhase = 0;
+              frameCount = 0;
+            }
           }
           break;
 
@@ -418,12 +465,11 @@ export default function SecureWipeDemo(): React.ReactElement {
       }
 
       // Add visual separators every 8 bits for readability
-      const formattedBinary =
-        currentBinary.match(/.{1,8}/g)?.join(' ') || currentBinary;
+      const formattedBinary = currentBinary.match(/.{1,8}/g)?.join(' ') || currentBinary;
       setBinaryAnimation(formattedBinary);
     };
 
-    const interval = setInterval(animateBinary, 120); // Slower 120ms intervals for better visibility
+    const interval = setInterval(animateBinary, 100); // Faster updates for smoother animation
     return () => clearInterval(interval);
   }, [isWiping]);
 
@@ -624,6 +670,196 @@ export default function SecureWipeDemo(): React.ReactElement {
       checkPrivileges(targetPath);
     }
   }, [targetPath, checkPrivileges]);
+
+  // Enhanced styles for better progress visualization
+  const enhancedStyles = `
+    .enhanced-progress-bar {
+      background: linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 100%);
+      border-radius: 8px;
+      height: 14px;
+      overflow: hidden;
+      margin: 16px 0;
+      position: relative;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+      border: 1px solid #d1d5db;
+    }
+
+    .enhanced-progress-fill {
+      background: linear-gradient(90deg, #3b82f6 0%, #1d4ed8 50%, #2563eb 100%);
+      height: 100%;
+      transition: width 0.6s ease-in-out;
+      position: relative;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+    }
+
+    .enhanced-progress-fill::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.4) 50%,
+        transparent 100%
+      );
+      animation: progress-shine 2s infinite;
+      border-radius: 6px;
+    }
+
+    @keyframes progress-shine {
+      0% {
+        transform: translateX(-100%);
+      }
+      100% {
+        transform: translateX(100%);
+      }
+    }
+
+    .enhanced-binary-animation {
+      font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
+      font-size: 11px;
+      line-height: 1.8;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+      color: #22d3ee;
+      padding: 20px;
+      border-radius: 10px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin: 16px 0;
+      border: 2px solid #0891b2;
+      box-shadow: 
+        0 0 25px rgba(34, 211, 238, 0.4),
+        inset 0 0 25px rgba(34, 211, 238, 0.1);
+      position: relative;
+      min-height: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      animation: binary-glow 3s ease-in-out infinite alternate;
+      transition: all 0.5s ease;
+    }
+
+    .enhanced-binary-animation.deletion-active {
+      background: linear-gradient(135deg, #1a0f0f 0%, #2d1b1b 50%, #1a0f0f 100%);
+      color: #ff6b6b;
+      border-color: #dc2626;
+      box-shadow: 
+        0 0 30px rgba(220, 38, 38, 0.5),
+        inset 0 0 30px rgba(220, 38, 38, 0.2);
+      animation: deletion-pulse 2s ease-in-out infinite alternate;
+    }
+
+    @keyframes deletion-pulse {
+      0% {
+        box-shadow: 
+          0 0 30px rgba(220, 38, 38, 0.5),
+          inset 0 0 30px rgba(220, 38, 38, 0.2);
+        border-color: #dc2626;
+      }
+      100% {
+        box-shadow: 
+          0 0 40px rgba(220, 38, 38, 0.7),
+          inset 0 0 40px rgba(220, 38, 38, 0.3);
+        border-color: #ff6b6b;
+      }
+    }
+
+    @keyframes binary-glow {
+      0% {
+        box-shadow: 
+          0 0 25px rgba(34, 211, 238, 0.4),
+          inset 0 0 25px rgba(34, 211, 238, 0.1);
+        border-color: #0891b2;
+      }
+      100% {
+        box-shadow: 
+          0 0 35px rgba(34, 211, 238, 0.6),
+          inset 0 0 35px rgba(34, 211, 238, 0.2);
+        border-color: #22d3ee;
+      }
+    }
+
+    .enhanced-binary-animation::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(34, 211, 238, 0.15) 50%,
+        transparent 100%
+      );
+      animation: binary-scan 4s linear infinite;
+      pointer-events: none;
+      border-radius: 8px;
+    }
+
+    @keyframes binary-scan {
+      0% {
+        transform: translateX(-100%);
+      }
+      100% {
+        transform: translateX(100%);
+      }
+    }
+
+    .enhanced-binary-animation-text {
+      position: relative;
+      z-index: 1;
+      text-shadow: 0 0 12px rgba(34, 211, 238, 0.8);
+      letter-spacing: 1.2px;
+      font-weight: 500;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .progress-container {
+      min-height: 320px;
+      display: flex;
+      flex-direction: column;
+      padding: 20px 0;
+    }
+
+    .progress-info {
+      margin-bottom: 20px;
+    }
+
+    .progress-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #1f2937;
+    }
+
+    .progress-subtitle {
+      font-size: 0.9rem;
+      color: #6b7280;
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+  `;
+
+  // Inject enhanced styles
+  React.useEffect(() => {
+    if (typeof document !== 'undefined' && !document.getElementById('enhanced-wipe-styles')) {
+      const styleElement = document.createElement('style');
+      styleElement.id = 'enhanced-wipe-styles';
+      styleElement.textContent = enhancedStyles;
+      document.head.appendChild(styleElement);
+    }
+  }, []);
 
   return (
     <div className="secure-wipe-container">
@@ -1039,72 +1275,141 @@ export default function SecureWipeDemo(): React.ReactElement {
 
           {/* Right Panel - Progress & Activity */}
           <div className="panel">
-            {isWiping && (
-              <div className="card">
-                <h3 className="card-title">Wipe Progress</h3>
-                <div className="progress-container">
-                  <div className="progress-info">
-                    <div className="progress-title">
-                      🔥 Secure Wipe in Progress
-                    </div>
-                    <div className="progress-subtitle">
-                      Using {algorithm.toUpperCase()} algorithm on: {targetPath}
-                    </div>
-                    {animationPhase && (
-                      <div
-                        style={{
-                          fontSize: '0.875rem',
-                          color: '#3b82f6',
-                          fontWeight: '500',
-                          marginTop: '8px',
-                        }}
-                      >
-                        {animationPhase}
-                      </div>
+            {/* Progress Card - Always visible but changes content based on state */}
+            <div className="card">
+              <h3 className="card-title">
+                {isWiping ? '🔥 Wipe Progress' : '📊 Operation Status'}
+              </h3>
+              <div className="progress-container">
+                <div className="progress-info">
+                  <div className="progress-title">
+                    {isWiping ? (
+                      <>🔥 Secure Wipe in Progress</>
+                    ) : (
+                      <>⏸️ Ready to Start Operation</>
                     )}
                   </div>
-
-                  {progress && (
-                    <div className="progress-bar">
-                      <div
-                        className="progress-fill"
-                        style={{
-                          width: `${
-                            progress.type === 'progress'
-                              ? (progress as SecureWipeProgressEvent).percent
-                              : progress.type === 'demo_file_creating'
-                                ? (progress as DemoFileCreatingEvent).percent
-                                : 0
-                          }%`,
-                        }}
-                      ></div>
-                    </div>
-                  )}
-
-                  <div className="binary-animation">
-                    <div className="binary-animation-text">
-                      {binaryAnimation || 'Initializing secure wipe process...'}
-                    </div>
+                  <div className="progress-subtitle">
+                    {isWiping ? (
+                      <>Using {algorithm.toUpperCase()} algorithm on: {targetPath || 'Demo File'}</>
+                    ) : (
+                      <>Configure your wipe settings and click start</>
+                    )}
                   </div>
-
-                  {progress && (
+                  {animationPhase && (
                     <div
                       style={{
-                        textAlign: 'center',
                         fontSize: '0.875rem',
-                        color: '#6b7280',
+                        color: '#3b82f6',
+                        fontWeight: '500',
+                        marginTop: '8px',
                       }}
                     >
-                      {progress.type === 'progress'
-                        ? `${(progress as SecureWipeProgressEvent).percent}% Complete - Pass ${(progress as SecureWipeProgressEvent).pass}/${(progress as SecureWipeProgressEvent).total_passes}`
-                        : progress.type === 'demo_file_creating'
-                          ? `Creating Demo File: ${Math.round((progress as DemoFileCreatingEvent).percent)}% Complete`
-                          : 'Processing...'}
+                      {animationPhase}
                     </div>
                   )}
                 </div>
+
+                {/* Enhanced Progress bar - Always visible */}
+                <div className="enhanced-progress-bar">
+                  <div
+                    className="enhanced-progress-fill"
+                    style={{
+                      width: `${
+                        isWiping && progress
+                          ? progress.type === 'progress'
+                            ? (progress as SecureWipeProgressEvent).percent
+                            : progress.type === 'demo_file_creating'
+                              ? (progress as DemoFileCreatingEvent).percent
+                              : 0
+                          : 0
+                      }%`,
+                      opacity: isWiping ? 1 : 0.3,
+                    }}
+                  ></div>
+                </div>
+
+                {/* Enhanced Binary animation - Always visible */}
+                <div className={`enhanced-binary-animation ${isDeletionPhase ? 'deletion-active' : ''}`}>
+                  <div className="enhanced-binary-animation-text">
+                    {isWiping ? (
+                      binaryAnimation || (
+                        <div style={{ 
+                          color: '#22d3ee', 
+                          fontSize: '13px',
+                          padding: '20px',
+                          lineHeight: '1.6',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          height: '100%'
+                        }}>
+                          <div style={{ marginBottom: '10px' }}>
+                            🔄 Initializing secure wipe process...
+                          </div>
+                          <div style={{ fontSize: '11px', opacity: 0.8 }}>
+                            Binary data conversion will begin shortly
+                          </div>
+                        </div>
+                      )
+                    ) : (
+                      <div style={{ 
+                        color: '#64748b', 
+                        fontSize: '14px',
+                        textAlign: 'center',
+                        padding: '30px 20px',
+                        lineHeight: '1.6',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center',
+                        height: '100%'
+                      }}>
+                        <div style={{ marginBottom: '12px' }}>
+                          🔒 Binary Data Visualization Panel
+                        </div>
+                        <div style={{ fontSize: '12px', opacity: 0.7, marginBottom: '8px' }}>
+                          Watch as your data gets securely overwritten with zeros
+                        </div>
+                        <div style={{ fontSize: '11px', opacity: 0.5, fontStyle: 'italic' }}>
+                          Start a wipe operation to see the live binary conversion
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Progress details */}
+                <div
+                  style={{
+                    textAlign: 'center',
+                    fontSize: '0.875rem',
+                    color: '#6b7280',
+                    minHeight: '40px',
+                    padding: '12px 0',
+                    marginTop: 'auto',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    lineHeight: '1.4',
+                  }}
+                >
+                  {isWiping && progress ? (
+                    progress.type === 'progress' ? (
+                      `${(progress as SecureWipeProgressEvent).percent}% Complete - Pass ${(progress as SecureWipeProgressEvent).pass}/${(progress as SecureWipeProgressEvent).total_passes}`
+                    ) : progress.type === 'demo_file_creating' ? (
+                      `Creating Demo File: ${Math.round((progress as DemoFileCreatingEvent).percent)}% Complete`
+                    ) : (
+                      'Processing...'
+                    )
+                  ) : isWiping ? (
+                    'Initializing...'
+                  ) : (
+                    'No active operation'
+                  )}
+                </div>
               </div>
-            )}
+            </div>
 
             <div className="card">
               <div className="log-header">
