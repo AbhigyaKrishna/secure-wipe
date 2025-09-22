@@ -86,6 +86,19 @@ export default function SecureWipeDemo(): React.ReactElement {
         setSystemInfo(result.systemInfo);
         setSupportsGui(result.systemInfo.supportsGuiPrompts || false);
         addLog(`✅ System info loaded: ${result.systemInfo.os_name} ${result.systemInfo.architecture}`);
+        
+        // Extract drives from system info as backup
+        if (result.systemInfo.storage_devices && result.systemInfo.storage_devices.length > 0) {
+          const mappedDrives = result.systemInfo.storage_devices.map(device => ({
+            path: device.device_path,
+            drive_type: 'disk' as const,
+            size_bytes: device.size_bytes,
+            size_gb: Math.round(device.size_bytes / (1024 * 1024 * 1024) * 100) / 100,
+            description: `${device.mount_point} (${device.file_system}) - ${Math.round(device.size_bytes / (1024 * 1024 * 1024) * 100) / 100} GB`
+          }));
+          setDrives(mappedDrives);
+          addLog(`✅ Found ${mappedDrives.length} drives from system info`);
+        }
       } else {
         addLog(`❌ Failed to load system info: ${result.error}`);
       }
@@ -94,18 +107,23 @@ export default function SecureWipeDemo(): React.ReactElement {
     }
   }, []);
 
-  // Load drives using proper API
+  // Load drives using proper API (with fallback to system info)
   const loadDrives = useCallback(async () => {
     try {
+      addLog('🔍 Attempting to load drives via drive list API...');
       const result: DriveListResult = await window.electron.secureWipe.getDriveList();
-      if (result.success && result.drives) {
+      addLog(`📋 Drive list API result: ${JSON.stringify(result)}`);
+      
+      if (result.success && result.drives && result.drives.length > 0) {
         setDrives(result.drives);
-        addLog(`✅ Found ${result.drives.length} drives`);
+        addLog(`✅ Found ${result.drives.length} drives via drive list API`);
       } else {
-        addLog(`❌ Failed to load drives: ${result.error}`);
+        addLog(`⚠️ Drive list API failed: ${result.error || 'No drives returned'}, using system info drives`);
+        // Drives should already be loaded from system info as fallback
       }
     } catch (error) {
-      addLog(`❌ Drive list error: ${error}`);
+      addLog(`⚠️ Drive list API error: ${error}, using system info drives`);
+      // Drives should already be loaded from system info as fallback
     }
   }, []);
 
