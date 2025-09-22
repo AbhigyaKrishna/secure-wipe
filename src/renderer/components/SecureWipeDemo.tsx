@@ -210,15 +210,15 @@ export default function SecureWipeDemo(): React.ReactElement {
 
     let currentPhase = 0; // 0: original data, 1: random overwrite, 2: zeros, 3: ones, 4: final zeros
     let frameCount = 0;
-    const FRAMES_PER_PHASE = 40; // Frames before moving to next phase
-    const BINARY_LENGTH = 128; // Longer binary string for better effect
-
+    const FRAMES_PER_PHASE = 80; // Longer phases for better visibility
+    const BINARY_LENGTH = 96; // Optimized length for better display
+    
     const phaseDescriptions = [
-      'Reading original data...',
-      'Overwriting with random data...',
-      'Converting to zeros...',
-      'Writing ones pattern...',
-      'Final zero pass - Data permanently erased!'
+      '🔍 Scanning original data patterns...',
+      '🎲 Overwriting with cryptographic random data...',
+      '⚡ Converting all bits to zeros...',
+      '🔄 Writing ones pattern for verification...',
+      '✅ Final zero pass - Data permanently destroyed!'
     ];
 
     // Generate initial "data" pattern
@@ -248,7 +248,7 @@ export default function SecureWipeDemo(): React.ReactElement {
           currentBinary = Array.from({ length: BINARY_LENGTH }, () =>
             Math.random() > 0.5 ? '1' : '0'
           ).join('');
-          if (frameCount >= FRAMES_PER_PHASE * 2) { // Longer random phase
+          if (frameCount >= FRAMES_PER_PHASE * 3) { // Much longer random phase
             currentPhase = 2;
             frameCount = 0;
           }
@@ -267,9 +267,9 @@ export default function SecureWipeDemo(): React.ReactElement {
           }
           break;
 
-        case 3: // Brief ones phase
+        case 3: // Ones phase
           currentBinary = '1'.repeat(BINARY_LENGTH);
-          if (frameCount >= FRAMES_PER_PHASE / 2) { // Medium ones phase
+          if (frameCount >= FRAMES_PER_PHASE) { // Full ones phase
             currentPhase = 4;
             frameCount = 0;
           }
@@ -296,7 +296,7 @@ export default function SecureWipeDemo(): React.ReactElement {
       setBinaryAnimation(formattedBinary);
     };
 
-    const interval = setInterval(animateBinary, 60); // Smooth 60ms intervals
+    const interval = setInterval(animateBinary, 120); // Slower 120ms intervals for better visibility
     return () => clearInterval(interval);
   }, [isWiping]);
 
@@ -321,9 +321,9 @@ export default function SecureWipeDemo(): React.ReactElement {
     const config: SecureWipeConfig = {
       target: `demo-${Date.now()}.tmp`,
       algorithm: 'random',
-      bufferSize: 1024,
+      bufferSize: 64, // Smaller buffer for slower, more visible progress
       demo: true,
-      demoSize: demoSize,
+      demoSize: Math.max(demoSize, 150), // Minimum 50MB for longer demo
       passes: 1,
     };
 
@@ -349,12 +349,14 @@ export default function SecureWipeDemo(): React.ReactElement {
     setProgress(null);
     addLog(`🔥 Starting wipe: ${targetPath}`);
 
-    // For Windows drives, we might need to format the path correctly
+    // For Windows drives, keep the full device path format
     let formattedTarget = targetPath;
-    if (targetPath.startsWith('\\\\.\\') && targetPath.endsWith(':')) {
-      // Convert \\.\I: to I: format which might be expected by the binary
-      formattedTarget = targetPath.replace('\\\\.\\', '');
-      addLog(`📝 Converted drive path: ${targetPath} → ${formattedTarget}`);
+    addLog(`📝 Using target path: ${formattedTarget}`);
+
+    // Check if this is a device path and warn user
+    if (formattedTarget.startsWith('\\\\.\\') && formattedTarget.endsWith(':')) {
+      addLog(`⚠️ WARNING: Attempting to wipe entire drive ${formattedTarget}`);
+      addLog(`⚠️ This will permanently erase ALL data on the drive!`);
     }
 
     const config: SecureWipeConfig = {
@@ -365,10 +367,24 @@ export default function SecureWipeDemo(): React.ReactElement {
     };
 
     try {
-      const result: SecureWipeResult = await window.electron.secureWipe.wipe(config);
-      if (!result.success) {
-        addLog(`❌ Wipe failed: ${result.error}`);
-        setIsWiping(false);
+      // Use privilege-aware wipe for device paths or when privileges are needed
+      if (formattedTarget.startsWith('\\\\.\\') || privilegeStatus?.needsElevation || requestPrivileges) {
+        addLog(`🔐 Using privilege-aware wipe for device/protected target`);
+        const privilegeConfig = {
+          ...config,
+          requestPrivileges: requestPrivileges || privilegeStatus?.needsElevation || false,
+        };
+        const result = await window.electron.secureWipe.wipeWithPrivileges(privilegeConfig);
+        if (!result.success) {
+          addLog(`❌ Privilege-aware wipe failed: ${result.error}`);
+          setIsWiping(false);
+        }
+      } else {
+        const result: SecureWipeResult = await window.electron.secureWipe.wipe(config);
+        if (!result.success) {
+          addLog(`❌ Wipe failed: ${result.error}`);
+          setIsWiping(false);
+        }
       }
     } catch (error) {
       addLog(`❌ Wipe error: ${error}`);
