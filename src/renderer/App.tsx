@@ -5,6 +5,7 @@ import './App.css';
 import SecureWipeDemo from './components/SecureWipeDemo';
 import LoginForm from './components/LoginForm';
 import VerificationForm from './components/VerificationForm';
+import CompletionCertificate from './components/CompletionCertificate';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 function Hello() {
