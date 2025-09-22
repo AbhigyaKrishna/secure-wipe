@@ -321,9 +321,9 @@ export default function SecureWipeDemo(): React.ReactElement {
     const config: SecureWipeConfig = {
       target: `demo-${Date.now()}.tmp`,
       algorithm: 'random',
-      bufferSize: 64, // Smaller buffer for slower, more visible progress
+      bufferSize: 8, // Very small buffer for much slower progress
       demo: true,
-      demoSize: Math.max(demoSize, 150), // Minimum 50MB for longer demo
+      demoSize: Math.max(demoSize, 500), // Minimum 500MB for very long demo
       passes: 1,
     };
 
@@ -424,6 +424,16 @@ export default function SecureWipeDemo(): React.ReactElement {
         addLog(`❌ Wipe failed: ${(event as any).message}`);
       } else if (event.type === 'progress') {
         addLog(`📊 Progress: ${(event as any).percent}% - Pass ${(event as any).pass}/${(event as any).total_passes}`);
+      } else if (event.type === 'demo_file_creating') {
+        addLog(`📁 Creating demo file: ${Math.round((event as any).percent)}% complete`);
+      } else if (event.type === 'demo_file_created') {
+        addLog(`✅ Demo file created: ${(event as any).size_mb}MB`);
+      } else if (event.type === 'start') {
+        addLog(`🚀 Starting ${(event as any).algorithm} algorithm (${(event as any).total_passes} pass${(event as any).total_passes > 1 ? 'es' : ''})`);
+      } else if (event.type === 'pass_start') {
+        addLog(`🔄 Pass ${(event as any).pass}/${(event as any).total_passes} started - Pattern: ${(event as any).pattern}`);
+      } else if (event.type === 'pass_complete') {
+        addLog(`✅ Pass ${(event as any).pass}/${(event as any).total_passes} completed`);
       }
     };
 
@@ -921,6 +931,12 @@ export default function SecureWipeDemo(): React.ReactElement {
                 />
               </div>
               
+              <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '6px', padding: '12px', marginBottom: '12px', fontSize: '0.75rem', color: '#92400e' }}>
+                ⚠️ <strong>Device Wiping Note:</strong> This binary supports file wiping and demo mode. 
+                Physical device wiping may require specialized hardware access or different tools.
+                Use demo mode to safely test the secure wipe functionality.
+              </div>
+              
               <div className="drive-list">
                 {drives.length === 0 ? (
                   <div style={{ padding: '20px', textAlign: 'center', color: '#6b7280' }}>
@@ -935,6 +951,9 @@ export default function SecureWipeDemo(): React.ReactElement {
                     >
                       <div className="drive-path">{drive.path}</div>
                       <div className="drive-desc">{drive.description}</div>
+                      <div style={{ fontSize: '0.6rem', color: '#dc2626', marginTop: '2px' }}>
+                        ⚠️ Device wiping may not be supported
+                      </div>
                     </div>
                   ))
                 )}
