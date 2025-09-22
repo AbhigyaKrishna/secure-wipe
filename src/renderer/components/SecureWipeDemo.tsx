@@ -170,11 +170,20 @@ export default function SecureWipeDemo(): React.ReactElement {
       
       if (result.success) {
         addLog(`✅ Privilege check completed for: ${path}`);
-        if (result.needsElevation && supportsGui) {
+        addLog(`  Current user: ${result.currentUser} (${result.isRoot ? 'admin' : 'regular user'})`);
+        addLog(`  Platform: ${result.platform}`);
+        addLog(`  Has privileges: ${result.hasPrivileges ? 'Yes' : 'No'}`);
+        addLog(`  Needs elevation: ${result.needsElevation ? 'Yes' : 'No'}`);
+        if (result.method) {
+          addLog(`  Elevation method: ${result.method}`);
+        }
+        
+        if (result.needsElevation) {
           try {
             const descResult = await window.electron.secureWipe.getElevationDescription(path);
             if (descResult.success && descResult.description) {
               setElevationDescription(descResult.description);
+              addLog(`Elevation method: ${descResult.description}`);
             }
           } catch (error) {
             addLog(`Failed to get elevation description: ${error}`);
@@ -367,24 +376,43 @@ export default function SecureWipeDemo(): React.ReactElement {
     };
 
     try {
-      // Use privilege-aware wipe for device paths or when privileges are needed
-      if (formattedTarget.startsWith('\\\\.\\') || privilegeStatus?.needsElevation || requestPrivileges) {
-        addLog(`🔐 Using privilege-aware wipe for device/protected target`);
-        const privilegeConfig = {
-          ...config,
-          requestPrivileges: requestPrivileges || privilegeStatus?.needsElevation || false,
-        };
-        const result = await window.electron.secureWipe.wipeWithPrivileges(privilegeConfig);
-        if (!result.success) {
-          addLog(`❌ Privilege-aware wipe failed: ${result.error}`);
-          setIsWiping(false);
+      // Always use privilege-aware wipe for better handling
+      addLog(`🔐 Using privilege-aware wipe with automatic privilege detection`);
+      
+      if (privilegeStatus?.needsElevation && requestPrivileges) {
+        addLog('⚠️ Admin privileges will be requested');
+        if (elevationDescription) {
+          addLog(`   ${elevationDescription}`);
+        }
+        if (!supportsGui) {
+          addLog('   Note: Console-based privilege prompt (no GUI)');
+        }
+      }
+      
+      const privilegeConfig = {
+        ...config,
+        requestPrivileges: requestPrivileges || privilegeStatus?.needsElevation || false,
+        privilegeOptions: {
+          name: 'Secure Wipe',
+          windowsHide: true,
+        },
+      };
+      
+      addLog(`Configuration: ${JSON.stringify(privilegeConfig, null, 2)}`);
+      
+      const result = await window.electron.secureWipe.wipeWithPrivileges(privilegeConfig);
+      
+      if (result.success) {
+        addLog('✅ Privilege-aware wipe completed successfully!');
+        if ((result as any).privilegesRequested) {
+          addLog(`   Privileges were requested using: ${(result as any).privilegeMethod}`);
         }
       } else {
-        const result: SecureWipeResult = await window.electron.secureWipe.wipe(config);
-        if (!result.success) {
-          addLog(`❌ Wipe failed: ${result.error}`);
-          setIsWiping(false);
+        addLog(`❌ Privilege-aware wipe failed: ${result.error}`);
+        if ((result as any).privilegeError) {
+          addLog(`   Privilege error: ${(result as any).privilegeError}`);
         }
+        setIsWiping(false);
       }
     } catch (error) {
       addLog(`❌ Wipe error: ${error}`);
