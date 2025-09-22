@@ -349,8 +349,16 @@ export default function SecureWipeDemo(): React.ReactElement {
     setProgress(null);
     addLog(`🔥 Starting wipe: ${targetPath}`);
 
+    // For Windows drives, we might need to format the path correctly
+    let formattedTarget = targetPath;
+    if (targetPath.startsWith('\\\\.\\') && targetPath.endsWith(':')) {
+      // Convert \\.\I: to I: format which might be expected by the binary
+      formattedTarget = targetPath.replace('\\\\.\\', '');
+      addLog(`📝 Converted drive path: ${targetPath} → ${formattedTarget}`);
+    }
+
     const config: SecureWipeConfig = {
-      target: targetPath,
+      target: formattedTarget,
       algorithm,
       bufferSize,
       passes: useCustomPasses ? customPasses : undefined,
@@ -395,18 +403,17 @@ export default function SecureWipeDemo(): React.ReactElement {
       if (event.type === 'complete') {
         setIsWiping(false);
         addLog('✅ Wipe completed successfully');
-        setCurrentStep(5); // Go to logs
       } else if (event.type === 'error') {
         setIsWiping(false);
-        addLog(`❌ Wipe failed: ${event.message}`);
+        addLog(`❌ Wipe failed: ${(event as any).message}`);
       } else if (event.type === 'progress') {
-        addLog(`📊 Progress: ${event.percentage}% - ${event.message}`);
+        addLog(`📊 Progress: ${(event as any).percent}% - Pass ${(event as any).pass}/${(event as any).total_passes}`);
       }
     };
 
-    window.electron.secureWipe.onProgress(handleProgress);
+    const cleanup = window.electron.secureWipe.onProgress(handleProgress);
     return () => {
-      window.electron.secureWipe.removeProgressListener();
+      cleanup();
     };
   }, []);
 
@@ -1046,7 +1053,7 @@ export default function SecureWipeDemo(): React.ReactElement {
                     <div className="progress-bar">
                       <div 
                         className="progress-fill" 
-                        style={{ width: `${progress.percentage || 0}%` }}
+                        style={{ width: `${(progress as any).percent || 0}%` }}
                       ></div>
                     </div>
                   )}
@@ -1059,7 +1066,7 @@ export default function SecureWipeDemo(): React.ReactElement {
                   
                   {progress && (
                     <div style={{ textAlign: 'center', fontSize: '0.875rem', color: '#6b7280' }}>
-                      {progress.percentage}% Complete - {progress.message || 'Processing...'}
+                      {progress.type === 'progress' ? `${(progress as any).percent}% Complete - Pass ${(progress as any).pass}/${(progress as any).total_passes}` : 'Processing...'}
                     </div>
                   )}
                 </div>
