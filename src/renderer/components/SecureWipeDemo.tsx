@@ -130,13 +130,28 @@ export default function SecureWipeDemo(): React.ReactElement {
 
   // Check binary status
   const checkBinaryStatus = useCallback(async () => {
-      try {
-      const result: BinaryCheckResult = await window.electron.secureWipe.checkBinaryStatus();
-        setBinaryStatus(result);
+    try {
+      addLog('🔍 Checking binary status...');
+      const result: BinaryCheckResult = await window.electron.secureWipe.checkBinary();
+      addLog(`📋 Binary check result: ${JSON.stringify(result)}`);
+      setBinaryStatus(result);
+      
       if (result.success && result.binaryStatus?.exists) {
         addLog(`✅ Binary found: ${result.binaryStatus.path}`);
-              } else {
+      } else {
         addLog(`❌ Binary not found: ${result.error || 'Unknown error'}`);
+        // Try to find the binary automatically
+        addLog('🔍 Attempting to find binary automatically...');
+        try {
+          const findResult = await window.electron.secureWipe.findBinary();
+          addLog(`📋 Find binary result: ${JSON.stringify(findResult)}`);
+          if (findResult.success) {
+            setBinaryStatus(findResult);
+            addLog(`✅ Binary found automatically: ${findResult.binaryStatus?.path}`);
+          }
+        } catch (findError) {
+          addLog(`❌ Auto-find binary error: ${findError}`);
+        }
       }
     } catch (error) {
       addLog(`❌ Binary check error: ${error}`);
@@ -710,9 +725,20 @@ export default function SecureWipeDemo(): React.ReactElement {
                 </div>
                 <div className="info-row">
                   <span className="info-label">Binary Status</span>
-                  <span className={`info-value ${binaryStatus?.binaryStatus?.exists ? 'success' : 'error'}`}>
-                    {binaryStatus?.binaryStatus?.exists ? 'Ready' : 'Not Found'}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span className={`info-value ${binaryStatus?.binaryStatus?.exists ? 'success' : 'error'}`}>
+                      {binaryStatus?.binaryStatus?.exists ? 'Ready' : 'Not Found'}
+                    </span>
+                    {!binaryStatus?.binaryStatus?.exists && (
+                      <button 
+                        className="button secondary"
+                        onClick={checkBinaryStatus}
+                        style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                      >
+                        Find Binary
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="info-row">
                   <span className="info-label">Available Drives</span>
