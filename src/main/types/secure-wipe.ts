@@ -124,6 +124,7 @@ export interface SystemInfo {
   available_memory_bytes: number;
   cpu_info: CpuInfo;
   storage_devices: StorageDevice[];
+  supportsGuiPrompts?: boolean;
 }
 
 // Union type for all possible events

@@ -85,7 +85,7 @@ export default function SecureWipeDemo(): React.ReactElement {
       if (result.success && result.systemInfo) {
         setSystemInfo(result.systemInfo);
         setSupportsGui(result.systemInfo.supportsGuiPrompts || false);
-        addLog(`✅ System info loaded: ${result.systemInfo.platform} ${result.systemInfo.architecture}`);
+        addLog(`✅ System info loaded: ${result.systemInfo.os_name} ${result.systemInfo.architecture}`);
       } else {
         addLog(`❌ Failed to load system info: ${result.error}`);
       }
@@ -94,7 +94,7 @@ export default function SecureWipeDemo(): React.ReactElement {
     }
   }, []);
 
-  // Load drives
+  // Load drives using proper API
   const loadDrives = useCallback(async () => {
     try {
       const result: DriveListResult = await window.electron.secureWipe.getDriveList();
@@ -108,6 +108,7 @@ export default function SecureWipeDemo(): React.ReactElement {
       addLog(`❌ Drive list error: ${error}`);
     }
   }, []);
+
 
   // Check binary status
   const checkBinaryStatus = useCallback(async () => {
@@ -304,38 +305,37 @@ export default function SecureWipeDemo(): React.ReactElement {
   }, [targetPath, checkPrivileges]);
 
 
-  // Neomorphism styles
-  const neomorphismStyles = `
+  // Clean, user-friendly styles
+  const cleanStyles = `
     .secure-wipe-container {
       min-height: 100vh;
-      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+      background: #f8fafc;
       padding: 20px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #1f2937;
     }
 
     .main-container {
       max-width: 1400px;
       margin: 0 auto;
-      background: #f8fafc;
-      border-radius: 30px;
-      box-shadow: 
-        20px 20px 60px #d1d9e6,
-        -20px -20px 60px #ffffff;
-      overflow: hidden;
+      background: white;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
     }
 
     .container-header {
-      background: linear-gradient(135deg, #475569 0%, #334155 100%);
-      padding: 30px 40px;
-      text-align: center;
+      background: #374151;
+      padding: 24px;
+      border-radius: 8px 8px 0 0;
       color: white;
+      text-align: center;
     }
 
     .container-title {
-      font-size: 2rem;
+      font-size: 1.875rem;
       font-weight: 700;
       margin: 0 0 8px 0;
-      text-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
     .container-subtitle {
@@ -345,297 +345,283 @@ export default function SecureWipeDemo(): React.ReactElement {
     }
 
     .main-content {
-      padding: 30px;
+      padding: 24px;
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
-      gap: 30px;
-      min-height: 600px;
+      gap: 24px;
     }
 
-    .left-panel {
+    .panel {
       display: flex;
       flex-direction: column;
       gap: 20px;
     }
 
-    .center-panel {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
+    .card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
     }
 
-    .right-panel {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
-
-    .neo-card {
-      background: #f8fafc;
-      border-radius: 20px;
-      padding: 25px;
-      box-shadow: 
-        8px 8px 16px #d1d9e6,
-        -8px -8px 16px #ffffff;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-    }
-
-    .neo-card-inset {
-      background: #f8fafc;
-      border-radius: 15px;
-      padding: 15px;
-      box-shadow: 
-        inset 4px 4px 8px #d1d9e6,
-        inset -4px -4px 8px #ffffff;
-      border: 1px solid rgba(0, 0, 0, 0.05);
-    }
-
-    .system-status-grid {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-
-    .status-item {
-      background: #f8fafc;
-      border-radius: 12px;
-      padding: 15px;
-      text-align: center;
-      box-shadow: 
-        4px 4px 8px #d1d9e6,
-        -4px -4px 8px #ffffff;
-    }
-
-    .status-icon {
-      font-size: 1.5rem;
-      margin-bottom: 8px;
-    }
-
-    .status-label {
-      font-size: 12px;
-      color: #64748b;
-      margin-bottom: 4px;
-    }
-
-    .status-value {
-      font-size: 14px;
+    .card-title {
+      font-size: 1.125rem;
       font-weight: 600;
-      color: #475569;
+      color: #1f2937;
+      margin: 0 0 16px 0;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .system-info {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #f3f4f6;
+    }
+
+    .info-row:last-child {
+      border-bottom: none;
+    }
+
+    .info-label {
+      font-weight: 500;
+      color: #6b7280;
+      font-size: 0.875rem;
+    }
+
+    .info-value {
+      font-weight: 600;
+      color: #1f2937;
+      font-size: 0.875rem;
+    }
+
+    .info-value.success {
+      color: #059669;
+    }
+
+    .info-value.error {
+      color: #dc2626;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-label {
+      display: block;
+      font-weight: 500;
+      color: #374151;
+      margin-bottom: 6px;
+      font-size: 0.875rem;
+    }
+
+    .form-input, .form-select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      background: white;
+      color: #1f2937;
+    }
+
+    .form-input:focus, .form-select:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
     }
 
     .drive-list {
       max-height: 300px;
       overflow-y: auto;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      background: #f9fafb;
     }
 
     .drive-item {
-      background: #f8fafc;
-      border-radius: 12px;
       padding: 12px;
-      margin-bottom: 8px;
+      border-bottom: 1px solid #e5e7eb;
       cursor: pointer;
-      transition: all 0.3s ease;
-      box-shadow: 
-        2px 2px 4px #d1d9e6,
-        -2px -2px 4px #ffffff;
-      border: 2px solid transparent;
+      transition: background-color 0.2s;
+    }
+
+    .drive-item:last-child {
+      border-bottom: none;
     }
 
     .drive-item:hover {
-      box-shadow: 
-        4px 4px 8px #d1d9e6,
-        -4px -4px 8px #ffffff;
+      background: #f3f4f6;
     }
 
     .drive-item.selected {
-      border-color: #475569;
-      box-shadow: 
-        2px 2px 4px #d1d9e6,
-        -2px -2px 4px #ffffff,
-        0 0 0 2px rgba(71, 85, 105, 0.1);
+      background: #dbeafe;
+      border-left: 4px solid #3b82f6;
     }
 
     .drive-path {
       font-weight: 600;
-      color: #475569;
-      font-size: 14px;
+      color: #1f2937;
+      font-size: 0.875rem;
     }
 
     .drive-desc {
-      font-size: 12px;
-      color: #64748b;
+      font-size: 0.75rem;
+      color: #6b7280;
       margin-top: 4px;
     }
 
-    .neo-button {
-      background: #f8fafc;
-      border: none;
-      border-radius: 12px;
-      padding: 12px 24px;
-      font-weight: 600;
+    .button {
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-weight: 500;
+      font-size: 0.875rem;
       cursor: pointer;
-      transition: all 0.3s ease;
-      box-shadow: 
-        4px 4px 8px #d1d9e6,
-        -4px -4px 8px #ffffff;
-      color: #475569;
-      font-size: 14px;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+      text-align: center;
+      display: inline-block;
     }
 
-    .neo-button:hover {
-      box-shadow: 
-        2px 2px 4px #d1d9e6,
-        -2px -2px 4px #ffffff;
-    }
-
-    .neo-button:active {
-      box-shadow: 
-        inset 2px 2px 4px #d1d9e6,
-        inset -2px -2px 4px #ffffff;
-    }
-
-    .neo-button.primary {
-      background: linear-gradient(135deg, #475569 0%, #334155 100%);
-      color: white;
-      box-shadow: 
-        4px 4px 8px rgba(71, 85, 105, 0.3),
-        -4px -4px 8px rgba(255, 255, 255, 0.8);
-    }
-
-    .neo-button.primary:hover {
-      box-shadow: 
-        6px 6px 12px rgba(71, 85, 105, 0.4),
-        -6px -6px 12px rgba(255, 255, 255, 0.9);
-    }
-
-    .neo-button.success {
-      background: linear-gradient(135deg, #059669 0%, #047857 100%);
-      color: white;
-      box-shadow: 
-        4px 4px 8px rgba(5, 150, 105, 0.3),
-        -4px -4px 8px rgba(255, 255, 255, 0.8);
-    }
-
-    .neo-button.danger {
-      background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-      color: white;
-      box-shadow: 
-        4px 4px 8px rgba(220, 38, 38, 0.3),
-        -4px -4px 8px rgba(255, 255, 255, 0.8);
-    }
-
-    .neo-button:disabled {
+    .button:disabled {
       opacity: 0.5;
       cursor: not-allowed;
-      box-shadow: 
-        inset 2px 2px 4px #d1d9e6,
-        inset -2px -2px 4px #ffffff;
     }
 
-    .neo-input {
-      background: #f8fafc;
-      border: none;
-      border-radius: 12px;
-      padding: 12px 16px;
-      font-size: 14px;
-      width: 100%;
-      box-shadow: 
-        inset 4px 4px 8px #d1d9e6,
-        inset -4px -4px 8px #ffffff;
-      color: #475569;
+    .button.primary {
+      background: #3b82f6;
+      color: white;
+      border-color: #3b82f6;
     }
 
-    .neo-input:focus {
-      outline: none;
-      box-shadow: 
-        inset 4px 4px 8px #d1d9e6,
-        inset -4px -4px 8px #ffffff,
-        0 0 0 3px rgba(71, 85, 105, 0.1);
+    .button.primary:hover:not(:disabled) {
+      background: #2563eb;
+      border-color: #2563eb;
     }
 
-    .neo-select {
-      background: #f8fafc;
-      border: none;
-      border-radius: 12px;
-      padding: 12px 16px;
-      font-size: 14px;
-      width: 100%;
-      box-shadow: 
-        inset 4px 4px 8px #d1d9e6,
-        inset -4px -4px 8px #ffffff;
-      color: #475569;
-      cursor: pointer;
+    .button.success {
+      background: #059669;
+      color: white;
+      border-color: #059669;
+    }
+
+    .button.success:hover:not(:disabled) {
+      background: #047857;
+      border-color: #047857;
+    }
+
+    .button.danger {
+      background: #dc2626;
+      color: white;
+      border-color: #dc2626;
+    }
+
+    .button.danger:hover:not(:disabled) {
+      background: #b91c1c;
+      border-color: #b91c1c;
+    }
+
+    .button.secondary {
+      background: white;
+      color: #374151;
+      border-color: #d1d5db;
+    }
+
+    .button.secondary:hover:not(:disabled) {
+      background: #f9fafb;
+      border-color: #9ca3af;
+    }
+
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .progress-container {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+
+    .progress-bar {
+      background: #e5e7eb;
+      border-radius: 4px;
+      height: 8px;
+      overflow: hidden;
+      margin: 12px 0;
+    }
+
+    .progress-fill {
+      background: #3b82f6;
+      height: 100%;
+      transition: width 0.3s ease;
     }
 
     .binary-animation {
       font-family: 'Courier New', monospace;
-      font-size: 10px;
-      line-height: 1.2;
-      background: #1a1a1a;
-      color: #00ff00;
-      padding: 15px;
-      border-radius: 10px;
+      font-size: 11px;
+      line-height: 1.4;
+      background: #1f2937;
+      color: #10b981;
+      padding: 12px;
+      border-radius: 6px;
       overflow-x: auto;
       white-space: nowrap;
-      margin: 15px 0;
-      box-shadow: 
-        inset 4px 4px 8px rgba(0, 0, 0, 0.3),
-        inset -4px -4px 8px rgba(255, 255, 255, 0.1);
-    }
-
-    .progress-container {
-      background: #f8fafc;
-      border-radius: 15px;
-      padding: 20px;
-      margin: 15px 0;
-      box-shadow: 
-        4px 4px 8px #d1d9e6,
-        -4px -4px 8px #ffffff;
-    }
-
-    .progress-bar {
-      background: #f8fafc;
-      border-radius: 10px;
-      height: 16px;
-      overflow: hidden;
-      box-shadow: 
-        inset 2px 2px 4px #d1d9e6,
-        inset -2px -2px 4px #ffffff;
-      margin: 15px 0;
-    }
-
-    .progress-fill {
-      background: linear-gradient(135deg, #475569 0%, #334155 100%);
-      height: 100%;
-      transition: width 0.3s ease;
-      border-radius: 10px;
+      margin: 12px 0;
+      border: 1px solid #374151;
     }
 
     .log-container {
-      background: #1a1a1a;
-      border-radius: 12px;
-      padding: 15px;
+      background: #1f2937;
+      border-radius: 6px;
+      padding: 12px;
       height: 300px;
       overflow-y: auto;
       font-family: 'Courier New', monospace;
-      font-size: 12px;
-      color: #00ff00;
-      box-shadow: 
-        inset 4px 4px 8px rgba(0, 0, 0, 0.3),
-        inset -4px -4px 8px rgba(255, 255, 255, 0.1);
+      font-size: 11px;
+      color: #10b981;
+      border: 1px solid #374151;
     }
 
     .log-entry {
-      margin-bottom: 3px;
+      margin-bottom: 2px;
       word-wrap: break-word;
+      line-height: 1.4;
     }
 
-    .section-title {
-      font-size: 16px;
+    .log-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .progress-info {
+      text-align: center;
+      margin-bottom: 12px;
+    }
+
+    .progress-title {
       font-weight: 600;
-      color: #475569;
-      margin: 0 0 15px 0;
+      color: #1f2937;
+      margin-bottom: 4px;
+    }
+
+    .progress-subtitle {
+      font-size: 0.875rem;
+      color: #6b7280;
     }
 
     @media (max-width: 1200px) {
@@ -650,30 +636,26 @@ export default function SecureWipeDemo(): React.ReactElement {
     @media (max-width: 768px) {
       .main-content {
         grid-template-columns: 1fr;
-      }
-      
-      .main-container {
-        margin: 10px;
-        border-radius: 20px;
+        padding: 16px;
+        gap: 16px;
       }
       
       .container-header {
-        padding: 20px;
+        padding: 20px 16px;
       }
       
       .container-title {
         font-size: 1.5rem;
       }
     }
-
   `;
 
   // Inject styles
   useEffect(() => {
-    if (typeof document !== 'undefined' && !document.getElementById('neomorphism-styles')) {
+    if (typeof document !== 'undefined' && !document.getElementById('clean-styles')) {
       const styleElement = document.createElement('style');
-      styleElement.id = 'neomorphism-styles';
-      styleElement.textContent = neomorphismStyles;
+      styleElement.id = 'clean-styles';
+      styleElement.textContent = cleanStyles;
       document.head.appendChild(styleElement);
     }
   }, []);
@@ -682,184 +664,195 @@ export default function SecureWipeDemo(): React.ReactElement {
     <div className="secure-wipe-container">
       <div className="main-container">
         <div className="container-header">
-          <h1 className="container-title">Secure Wipe</h1>
-          <p className="container-subtitle">Professional data erasure with privilege escalation</p>
-      </div>
+          <h1 className="container-title">Secure Data Wipe Tool</h1>
+          <p className="container-subtitle">Permanently erase files and drives with military-grade security</p>
+        </div>
 
         <div className="main-content">
-          {/* Left Panel - System Status */}
-          <div className="left-panel">
-            <div className="neo-card">
-              <h3 className="section-title">System Status</h3>
-              <div className="system-status-grid">
-                <div className="status-item">
-                  <div className="status-icon">💻</div>
-                  <div className="status-label">Platform</div>
-                  <div className="status-value">
-                    {systemInfo?.platform || 'Loading...'}
-                  </div>
+          {/* Left Panel - System Information */}
+          <div className="panel">
+            <div className="card">
+              <h3 className="card-title">System Information</h3>
+              <div className="system-info">
+                <div className="info-row">
+                  <span className="info-label">Operating System</span>
+                  <span className="info-value">{systemInfo?.os_name || 'Loading...'}</span>
                 </div>
-                <div className="status-item">
-                  <div className="status-icon">🔧</div>
-                  <div className="status-label">Binary</div>
-                  <div className={`status-value ${binaryStatus?.binaryStatus?.exists ? '' : 'error'}`}>
-                    {binaryStatus?.binaryStatus?.exists ? '✅ Ready' : '❌ Not Found'}
-                  </div>
+                <div className="info-row">
+                  <span className="info-label">Architecture</span>
+                  <span className="info-value">{systemInfo?.architecture || 'Loading...'}</span>
                 </div>
-                <div className="status-item">
-                  <div className="status-icon">💾</div>
-                  <div className="status-label">Drives</div>
-                  <div className="status-value">{drives.length}</div>
+                <div className="info-row">
+                  <span className="info-label">Current User</span>
+                  <span className="info-value">{systemInfo?.username || 'Loading...'}</span>
                 </div>
-                <div className="status-item">
-                  <div className="status-icon">👤</div>
-                  <div className="status-label">User</div>
-                  <div className="status-value">
-                    {systemInfo?.currentUser || 'Unknown'}
-                  </div>
+                <div className="info-row">
+                  <span className="info-label">Hostname</span>
+                  <span className="info-value">{systemInfo?.hostname || 'Loading...'}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Binary Status</span>
+                  <span className={`info-value ${binaryStatus?.binaryStatus?.exists ? 'success' : 'error'}`}>
+                    {binaryStatus?.binaryStatus?.exists ? 'Ready' : 'Not Found'}
+                  </span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Available Drives</span>
+                  <span className="info-value">{drives.length} detected</span>
                 </div>
               </div>
-      </div>
+            </div>
 
-            <div className="neo-card">
-              <h3 className="section-title">Target Selection</h3>
-              <div className="neo-card-inset" style={{ marginBottom: '15px' }}>
-            <input
-              type="text"
-                  className="neo-input"
-              value={targetPath}
-              onChange={(e) => setTargetPath(e.target.value)}
-              placeholder="/path/to/file or /dev/device"
-              disabled={isWiping}
-            />
+            <div className="card">
+              <h3 className="card-title">Target Selection</h3>
+              <div className="form-group">
+                <label className="form-label">Enter target path or select from drives below:</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={targetPath}
+                  onChange={(e) => setTargetPath(e.target.value)}
+                  placeholder="Enter file path or drive (e.g., C:\file.txt or \\.\C:)"
+                  disabled={isWiping}
+                />
               </div>
               
               <div className="drive-list">
-                {drives.map((drive, index) => (
-                  <div
-                    key={index}
-                    className={`drive-item ${targetPath === drive.path ? 'selected' : ''}`}
-                    onClick={() => setTargetPath(drive.path)}
-                  >
-                    <div className="drive-path">{drive.path}</div>
-                    <div className="drive-desc">{drive.description}</div>
+                {drives.length === 0 ? (
+                  <div style={{ padding: '20px', textAlign: 'center', color: '#6b7280' }}>
+                    Loading drives...
                   </div>
-                ))}
+                ) : (
+                  drives.map((drive, index) => (
+                    <div
+                      key={index}
+                      className={`drive-item ${targetPath === drive.path ? 'selected' : ''}`}
+                      onClick={() => setTargetPath(drive.path)}
+                    >
+                      <div className="drive-path">{drive.path}</div>
+                      <div className="drive-desc">{drive.description}</div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
-        </div>
+          </div>
 
           {/* Center Panel - Configuration */}
-          <div className="center-panel">
-            <div className="neo-card">
-              <h3 className="section-title">Algorithm</h3>
-            <select
-                className="neo-select"
-              value={algorithm}
-              onChange={(e) => setAlgorithm(e.target.value as any)}
-              disabled={isWiping}
-            >
-              <option value="random">Random (1 pass)</option>
-                <option value="dod5220">DoD 5220 (3 passes)</option>
-                <option value="gutmann">Gutmann (35 passes)</option>
-              <option value="zeros">Zeros (1 pass)</option>
-              <option value="ones">Ones (1 pass)</option>
-            </select>
+          <div className="panel">
+            <div className="card">
+              <h3 className="card-title">Wipe Algorithm</h3>
+              <div className="form-group">
+                <label className="form-label">Choose security level:</label>
+                <select
+                  className="form-select"
+                  value={algorithm}
+                  onChange={(e) => setAlgorithm(e.target.value as any)}
+                  disabled={isWiping}
+                >
+                  <option value="random">Random Overwrite (1 pass) - Fast</option>
+                  <option value="dod5220">DoD 5220.22-M (3 passes) - Standard</option>
+                  <option value="gutmann">Gutmann Method (35 passes) - Maximum Security</option>
+                  <option value="zeros">Zero Fill (1 pass) - Basic</option>
+                  <option value="ones">One Fill (1 pass) - Basic</option>
+                </select>
+              </div>
             </div>
 
-            <div className="neo-card">
-              <h3 className="section-title">Settings</h3>
-              <div className="neo-card-inset" style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontSize: '12px', fontWeight: '600', color: '#64748b' }}>
-                  Buffer Size (KB)
-                </label>
+            <div className="card">
+              <h3 className="card-title">Advanced Settings</h3>
+              <div className="form-group">
+                <label className="form-label">Buffer Size (KB):</label>
                 <input
                   type="number"
-                  className="neo-input"
+                  className="form-input"
                   value={bufferSize}
                   onChange={(e) => setBufferSize(parseInt(e.target.value) || 1024)}
                   min="1"
                   max="10240"
+                  disabled={isWiping}
                 />
+                <small style={{ color: '#6b7280', fontSize: '0.75rem' }}>
+                  Higher values may improve performance but use more memory
+                </small>
               </div>
-              <div className="neo-card-inset">
-                <label style={{ display: 'block', marginBottom: '8px', fontSize: '12px', fontWeight: '600', color: '#64748b' }}>
-                  Demo Size (MB)
-          </label>
+              <div className="form-group">
+                <label className="form-label">Demo File Size (MB):</label>
                 <input
                   type="number"
-                  className="neo-input"
+                  className="form-input"
                   value={demoSize}
                   onChange={(e) => setDemoSize(parseInt(e.target.value) || 10)}
                   min="1"
                   max="100"
+                  disabled={isWiping}
                 />
-        </div>
-      </div>
+                <small style={{ color: '#6b7280', fontSize: '0.75rem' }}>
+                  Size of temporary file created for safe testing
+                </small>
+              </div>
+            </div>
 
             {privilegeStatus?.needsElevation && (
-              <div className="neo-card">
-                <h3 className="section-title">Privileges</h3>
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
-                  <input
-                    type="checkbox"
-                    id="requestPrivileges"
-                    checked={requestPrivileges}
-                    onChange={(e) => setRequestPrivileges(e.target.checked)}
-                    style={{ marginRight: '8px' }}
-                  />
-                  <label htmlFor="requestPrivileges" style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>
-                    Auto-request admin privileges
+              <div className="card">
+                <h3 className="card-title">Administrator Privileges Required</h3>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={requestPrivileges}
+                      onChange={(e) => setRequestPrivileges(e.target.checked)}
+                      style={{ marginRight: '8px' }}
+                    />
+                    <span style={{ fontSize: '0.875rem' }}>Automatically request admin privileges</span>
                   </label>
                 </div>
-                <div style={{ fontSize: '11px', color: '#64748b', lineHeight: '1.4' }}>
-                  Automatically request administrator privileges when needed.
-                </div>
+                <small style={{ color: '#dc2626', fontSize: '0.75rem', display: 'block' }}>
+                  ⚠️ This operation requires administrator privileges to access the selected target.
+                </small>
               </div>
             )}
 
-            <div className="neo-card">
-              <h3 className="section-title">Actions</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <button
-                  className="neo-button success" 
-          onClick={handleStartDemo}
+            <div className="card">
+              <h3 className="card-title">Actions</h3>
+              <div className="actions">
+                <button 
+                  className="button success" 
+                  onClick={handleStartDemo}
                   disabled={!binaryStatus?.binaryStatus?.exists || isWiping}
-        >
-                  🛡️ Safe Demo ({demoSize}MB)
-        </button>
-        <button
-                  className="neo-button primary" 
-          onClick={handleStartWipe}
+                >
+                  🛡️ Run Safe Demo ({demoSize}MB)
+                </button>
+                <button 
+                  className="button primary" 
+                  onClick={handleStartWipe}
                   disabled={!targetPath || !binaryStatus?.binaryStatus?.exists || isWiping}
-        >
+                >
                   🔥 Start Secure Wipe
-        </button>
+                </button>
                 {isWiping && (
                   <button 
-                    className="neo-button danger" 
+                    className="button danger" 
                     onClick={handleCancel}
                     disabled={isCancelling}
                   >
-                    {isCancelling ? '⏳ Cancelling...' : '⏹️ Cancel'}
+                    {isCancelling ? '⏳ Cancelling...' : '⏹️ Cancel Operation'}
                   </button>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Right Panel - Progress & Logs */}
-          <div className="right-panel">
+          {/* Right Panel - Progress & Activity */}
+          <div className="panel">
             {isWiping && (
-              <div className="neo-card">
-                <h3 className="section-title">Progress</h3>
+              <div className="card">
+                <h3 className="card-title">Wipe Progress</h3>
                 <div className="progress-container">
-                  <div style={{ textAlign: 'center', marginBottom: '15px' }}>
-                    <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '5px', color: '#475569' }}>
-                      🔥 Wiping in Progress
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#64748b' }}>
-                      Using {algorithm.toUpperCase()} algorithm
+                  <div className="progress-info">
+                    <div className="progress-title">🔥 Secure Wipe in Progress</div>
+                    <div className="progress-subtitle">
+                      Using {algorithm.toUpperCase()} algorithm on: {targetPath}
                     </div>
                   </div>
                   
@@ -869,32 +862,38 @@ export default function SecureWipeDemo(): React.ReactElement {
                         className="progress-fill" 
                         style={{ width: `${progress.percentage || 0}%` }}
                       ></div>
-            </div>
-          )}
+                    </div>
+                  )}
                   
                   <div className="binary-animation">
-                    {binaryAnimation || '0101010101010101010101010101010101010101010101010101010101010101'}
+                    {binaryAnimation || '01010101 → 00000000 → 11111111 → Random Data → 00000000'}
                   </div>
+                  
+                  {progress && (
+                    <div style={{ textAlign: 'center', fontSize: '0.875rem', color: '#6b7280' }}>
+                      {progress.percentage}% Complete - {progress.message || 'Processing...'}
+                    </div>
+                  )}
                 </div>
-        </div>
-      )}
+              </div>
+            )}
 
-            <div className="neo-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                <h3 className="section-title" style={{ margin: 0 }}>Activity Log</h3>
+            <div className="card">
+              <div className="log-header">
+                <h3 className="card-title" style={{ margin: 0 }}>Activity Log</h3>
                 <button 
-                  className="neo-button" 
+                  className="button secondary" 
                   onClick={() => setLogs([])}
-                  style={{ padding: '6px 12px', fontSize: '12px' }}
+                  style={{ padding: '6px 12px', fontSize: '0.75rem' }}
                 >
-                  🗑️ Clear
+                  Clear Log
                 </button>
               </div>
               
               <div className="log-container">
                 {logs.length === 0 ? (
-                  <div style={{ color: '#64748b', fontStyle: 'italic', fontSize: '11px' }}>
-                    No activity yet. Start a wipe operation to see logs here.
+                  <div style={{ color: '#6b7280', fontStyle: 'italic', padding: '20px', textAlign: 'center' }}>
+                    No activity yet. Operations will be logged here.
                   </div>
                 ) : (
                   logs.map((log, index) => (
