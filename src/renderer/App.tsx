@@ -5,12 +5,10 @@ import './App.css';
 import SecureWipeDemo from './components/SecureWipeDemo';
 import LoginForm from './components/LoginForm';
 import VerificationForm from './components/VerificationForm';
-import CompletionCertificate from './components/CompletionCertificate';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 function Hello() {
   const { isAuthenticated, logout } = useAuth();
-
   return (
     <div className="app-container fade-in">
       <div className="app-header">
@@ -21,12 +19,12 @@ function Hello() {
         </p>
       </div>
       <div className="nav-buttons">
-        <Link to="/demo">
+        <Link to="/">
           <button type="button" className="primary nav-button">
             <span role="img" aria-label="demo">
               🔧
             </span>
-            Open Demo
+            Open Secure Wipe
           </button>
         </Link>
         <a
@@ -85,27 +83,37 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return children;
 }
 
+function MainApp() {
+  const { isAuthenticated, needsVerification } = useAuth();
+
+  // If user is authenticated and verified, show the secure wipe demo directly
+  if (isAuthenticated && !needsVerification) {
+    return <SecureWipeDemo />;
+  }
+
+  // Otherwise, show the protected route (login/verification)
+  return (
+    <ProtectedRoute>
+      <SecureWipeDemo />
+    </ProtectedRoute>
+  );
+}
+
 export default function App() {
   return (
     <AuthProvider>
       <Router>
         <Routes>
+          <Route path="/" element={<MainApp />} />
           <Route
-            path="/"
+            path="/home"
             element={
               <ProtectedRoute>
                 <Hello />
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/demo"
-            element={
-              <ProtectedRoute>
-                <SecureWipeDemo />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/demo" element={<MainApp />} />
         </Routes>
       </Router>
     </AuthProvider>
