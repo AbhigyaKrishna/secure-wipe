@@ -68,6 +68,7 @@ export default function SecureWipeDemo(): React.ReactElement {
   const [progress, setProgress] = useState<SecureWipeEvent | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [binaryAnimation, setBinaryAnimation] = useState<string>('');
+  const [animationPhase, setAnimationPhase] = useState<string>('');
   
   // System state
   const [drives, setDrives] = useState<DriveInfo[]>([]);
@@ -199,22 +200,103 @@ export default function SecureWipeDemo(): React.ReactElement {
     checkBinaryStatus();
   }, [loadSystemInfo, loadDrives, checkBinaryStatus]);
 
-  // Binary animation
+  // Enhanced Binary animation with proper conversion effect
   const generateBinaryAnimation = useCallback(() => {
     if (!isWiping) {
       setBinaryAnimation('');
+      setAnimationPhase('');
       return;
     }
 
+    let currentPhase = 0; // 0: original data, 1: random overwrite, 2: zeros, 3: ones, 4: final zeros
+    let frameCount = 0;
+    const FRAMES_PER_PHASE = 40; // Frames before moving to next phase
+    const BINARY_LENGTH = 128; // Longer binary string for better effect
+
+    const phaseDescriptions = [
+      'Reading original data...',
+      'Overwriting with random data...',
+      'Converting to zeros...',
+      'Writing ones pattern...',
+      'Final zero pass - Data permanently erased!'
+    ];
+
+    // Generate initial "data" pattern
+    const originalData = Array.from({ length: BINARY_LENGTH }, (_, i) => {
+      // Create a pattern that looks like real data
+      const patterns = ['10110100', '01001011', '11010010', '00101101', '10011010'];
+      return patterns[i % patterns.length][i % 8];
+    }).join('');
+
     const animateBinary = () => {
-      const length = 64;
-      const binary = Array.from({ length }, () =>
-        Math.random() > 0.5 ? '1' : '0'
-      ).join('');
-      setBinaryAnimation(binary);
+      frameCount++;
+      let currentBinary = '';
+
+      // Update phase description
+      setAnimationPhase(phaseDescriptions[currentPhase] || 'Processing...');
+
+      switch (currentPhase) {
+        case 0: // Show original data
+          currentBinary = originalData;
+          if (frameCount >= FRAMES_PER_PHASE) {
+            currentPhase = 1;
+            frameCount = 0;
+          }
+          break;
+
+        case 1: // Random overwrite phase (simulating secure deletion)
+          currentBinary = Array.from({ length: BINARY_LENGTH }, () =>
+            Math.random() > 0.5 ? '1' : '0'
+          ).join('');
+          if (frameCount >= FRAMES_PER_PHASE * 2) { // Longer random phase
+            currentPhase = 2;
+            frameCount = 0;
+          }
+          break;
+
+        case 2: // Gradual conversion to zeros
+          const zerosProgress = Math.min(frameCount / FRAMES_PER_PHASE, 1);
+          const zerosCount = Math.floor(BINARY_LENGTH * zerosProgress);
+          currentBinary = '0'.repeat(zerosCount) + 
+            Array.from({ length: BINARY_LENGTH - zerosCount }, () =>
+              Math.random() > 0.7 ? '1' : '0'
+            ).join('');
+          if (frameCount >= FRAMES_PER_PHASE) {
+            currentPhase = 3;
+            frameCount = 0;
+          }
+          break;
+
+        case 3: // Brief ones phase
+          currentBinary = '1'.repeat(BINARY_LENGTH);
+          if (frameCount >= FRAMES_PER_PHASE / 2) { // Medium ones phase
+            currentPhase = 4;
+            frameCount = 0;
+          }
+          break;
+
+        case 4: // Final zeros with completion effect
+          const finalProgress = Math.min(frameCount / FRAMES_PER_PHASE, 1);
+          const finalZerosCount = Math.floor(BINARY_LENGTH * finalProgress);
+          currentBinary = '0'.repeat(finalZerosCount) + 
+            '1'.repeat(BINARY_LENGTH - finalZerosCount);
+          if (frameCount >= FRAMES_PER_PHASE) {
+            // Reset for continuous loop
+            currentPhase = 0;
+            frameCount = 0;
+          }
+          break;
+
+        default:
+          currentBinary = '0'.repeat(BINARY_LENGTH);
+      }
+
+      // Add visual separators every 8 bits for readability
+      const formattedBinary = currentBinary.match(/.{1,8}/g)?.join(' ') || currentBinary;
+      setBinaryAnimation(formattedBinary);
     };
 
-    const interval = setInterval(animateBinary, 100);
+    const interval = setInterval(animateBinary, 60); // Smooth 60ms intervals
     return () => clearInterval(interval);
   }, [isWiping]);
 
@@ -237,12 +319,12 @@ export default function SecureWipeDemo(): React.ReactElement {
     addLog('🚀 Starting demo wipe...');
 
     const config: SecureWipeConfig = {
-      targetPath: `/tmp/demo-${Date.now()}.tmp`,
+      target: `demo-${Date.now()}.tmp`,
       algorithm: 'random',
-      bufferSize: demoSize * 1024,
-      customPasses: 1,
-      useCustomPasses: true,
-      demoMode: true,
+      bufferSize: 1024,
+      demo: true,
+      demoSize: demoSize,
+      passes: 1,
     };
 
     try {
@@ -268,12 +350,10 @@ export default function SecureWipeDemo(): React.ReactElement {
     addLog(`🔥 Starting wipe: ${targetPath}`);
 
     const config: SecureWipeConfig = {
-      targetPath,
+      target: targetPath,
       algorithm,
       bufferSize,
-      customPasses: useCustomPasses ? customPasses : undefined,
-      useCustomPasses,
-      requestPrivileges,
+      passes: useCustomPasses ? customPasses : undefined,
     };
 
     try {
@@ -604,16 +684,73 @@ export default function SecureWipeDemo(): React.ReactElement {
 
     .binary-animation {
       font-family: 'Courier New', monospace;
-      font-size: 11px;
-      line-height: 1.4;
-      background: #1f2937;
-      color: #10b981;
-      padding: 12px;
-      border-radius: 6px;
+      font-size: 12px;
+      line-height: 1.6;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #22d3ee;
+      padding: 16px;
+      border-radius: 8px;
       overflow-x: auto;
-      white-space: nowrap;
-      margin: 12px 0;
-      border: 1px solid #374151;
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin: 16px 0;
+      border: 2px solid #0891b2;
+      box-shadow: 
+        0 0 20px rgba(34, 211, 238, 0.3),
+        inset 0 0 20px rgba(34, 211, 238, 0.1);
+      position: relative;
+      min-height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      animation: binary-glow 2s ease-in-out infinite alternate;
+    }
+
+    @keyframes binary-glow {
+      0% {
+        box-shadow: 
+          0 0 20px rgba(34, 211, 238, 0.3),
+          inset 0 0 20px rgba(34, 211, 238, 0.1);
+      }
+      100% {
+        box-shadow: 
+          0 0 30px rgba(34, 211, 238, 0.5),
+          inset 0 0 30px rgba(34, 211, 238, 0.2);
+      }
+    }
+
+    .binary-animation::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(34, 211, 238, 0.1) 50%,
+        transparent 100%
+      );
+      animation: binary-scan 3s linear infinite;
+      pointer-events: none;
+    }
+
+    @keyframes binary-scan {
+      0% {
+        transform: translateX(-100%);
+      }
+      100% {
+        transform: translateX(100%);
+      }
+    }
+
+    .binary-animation-text {
+      position: relative;
+      z-index: 1;
+      text-shadow: 0 0 10px rgba(34, 211, 238, 0.8);
+      letter-spacing: 1px;
     }
 
     .log-container {
@@ -898,6 +1035,11 @@ export default function SecureWipeDemo(): React.ReactElement {
                     <div className="progress-subtitle">
                       Using {algorithm.toUpperCase()} algorithm on: {targetPath}
                     </div>
+                    {animationPhase && (
+                      <div style={{ fontSize: '0.875rem', color: '#3b82f6', fontWeight: '500', marginTop: '8px' }}>
+                        {animationPhase}
+                      </div>
+                    )}
                   </div>
                   
                   {progress && (
@@ -910,7 +1052,9 @@ export default function SecureWipeDemo(): React.ReactElement {
                   )}
                   
                   <div className="binary-animation">
-                    {binaryAnimation || '01010101 → 00000000 → 11111111 → Random Data → 00000000'}
+                    <div className="binary-animation-text">
+                      {binaryAnimation || 'Initializing secure wipe process...'}
+                    </div>
                   </div>
                   
                   {progress && (
