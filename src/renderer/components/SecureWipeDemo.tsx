@@ -111,7 +111,7 @@ export default function SecureWipeDemo(): React.ReactElement {
   const loadDrives = useCallback(async () => {
     try {
       addLog('🔍 Attempting to load drives via drive list API...');
-      const result: DriveListResult = await window.electron.secureWipe.getDriveList();
+      const result: DriveListResult = await window.electron.secureWipe.listDrives();
       addLog(`📋 Drive list API result: ${JSON.stringify(result)}`);
       
       if (result.success && result.drives && result.drives.length > 0) {
@@ -246,7 +246,7 @@ export default function SecureWipeDemo(): React.ReactElement {
     };
 
     try {
-      const result: SecureWipeResult = await window.electron.secureWipe.startWipe(config);
+      const result: SecureWipeResult = await window.electron.secureWipe.wipe(config);
       if (!result.success) {
         addLog(`❌ Demo failed: ${result.error}`);
         setIsWiping(false);
@@ -277,7 +277,7 @@ export default function SecureWipeDemo(): React.ReactElement {
     };
 
     try {
-      const result: SecureWipeResult = await window.electron.secureWipe.startWipe(config);
+      const result: SecureWipeResult = await window.electron.secureWipe.wipe(config);
       if (!result.success) {
         addLog(`❌ Wipe failed: ${result.error}`);
         setIsWiping(false);
@@ -293,11 +293,11 @@ export default function SecureWipeDemo(): React.ReactElement {
     addLog('⏹️ Cancelling operation...');
 
     try {
-      const result: SecureWipeResult = await window.electron.secureWipe.cancelWipe();
+      const result: SecureWipeResult = await window.electron.secureWipe.cancel();
       if (result.success) {
         addLog('✅ Operation cancelled');
-      setIsWiping(false);
-      setProgress(null);
+        setIsWiping(false);
+        setProgress(null);
       } else {
         addLog(`❌ Cancel failed: ${result.error}`);
       }
