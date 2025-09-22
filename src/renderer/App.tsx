@@ -9,7 +9,6 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 function Hello() {
   const { isAuthenticated, logout } = useAuth();
-
   return (
     <div className="app-container fade-in">
       <div className="app-header">
