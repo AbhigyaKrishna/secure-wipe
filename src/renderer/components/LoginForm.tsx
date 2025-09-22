@@ -7,7 +7,11 @@ interface LoginFormProps {
   error: string | null;
 }
 
-export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading, error }) => {
+function LoginForm({
+  onLogin,
+  isLoading,
+  error,
+}: LoginFormProps): React.ReactElement {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -80,7 +84,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading, error 
           >
             {isLoading ? (
               <>
-                <span className="loading-spinner"></span>
+                <span className="loading-spinner" />
                 <span>Signing In...</span>
               </>
             ) : (
@@ -93,12 +97,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading, error 
         </form>
 
         <div className="auth-footer">
-          <div className="footer-divider"></div>
+          <div className="footer-divider" />
           <p className="footer-text">
             Secure authentication powered by{' '}
-            <a 
-              href="https://sih-bu.vercel.app/" 
-              target="_blank" 
+            <a
+              href="https://sih-bu.vercel.app/"
+              target="_blank"
               rel="noopener noreferrer"
               className="footer-link"
             >
@@ -109,4 +113,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading, error 
       </div>
     </div>
   );
-};
+}
+
+export default LoginForm;

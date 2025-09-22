@@ -28,7 +28,7 @@ export class ApiService {
 
   private setupIpcHandlers(): void {
     console.log('Setting up API IPC handlers...');
-    
+
     // Login handler
     ipcMain.handle('api:login', async (event, request: LoginRequest) => {
       console.log('api:login handler called with:', request);
@@ -37,7 +37,7 @@ export class ApiService {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json',
+            Accept: 'application/json',
           },
           body: JSON.stringify(request),
         });
@@ -54,8 +54,8 @@ export class ApiService {
           throw new Error(errorMessage);
         }
 
-        const data: ApiResponse = await response.json() as ApiResponse;
-        
+        const data: ApiResponse = (await response.json()) as ApiResponse;
+
         if (data.status === 'success' && data.token) {
           return {
             success: true,
@@ -65,108 +65,114 @@ export class ApiService {
               token: data.token,
             },
           };
-        } else {
-          throw new Error(data.message || 'Login failed');
         }
+        throw new Error(data.message || 'Login failed');
       } catch (error) {
         return {
           success: false,
-          error: error instanceof Error ? error.message : 'Unknown error occurred',
+          error:
+            error instanceof Error ? error.message : 'Unknown error occurred',
         };
       }
     });
 
     // Verification handler
-    ipcMain.handle('api:verify-digilocker', async (event, request: VerificationRequest) => {
-      console.log('api:verify-digilocker handler called with:', request);
-      try {
-        const response = await fetch(`${this.baseUrl}/verify-digilocker`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: JSON.stringify(request),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          let errorMessage = `HTTP error! status: ${response.status}`;
-          try {
-            const errorData = JSON.parse(errorText);
-            errorMessage = errorData.message || errorMessage;
-          } catch {
-            // If response is not JSON, use the default error message
-          }
-          throw new Error(errorMessage);
-        }
-
-        const data: ApiResponse = await response.json() as ApiResponse;
-        
-        if (data.status === 'success') {
-          return {
-            success: true,
-            data: {
-              status: data.status,
-              message: data.message,
+    ipcMain.handle(
+      'api:verify-digilocker',
+      async (event, request: VerificationRequest) => {
+        console.log('api:verify-digilocker handler called with:', request);
+        try {
+          const response = await fetch(`${this.baseUrl}/verify-digilocker`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
             },
-          };
-        } else {
+            body: JSON.stringify(request),
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            let errorMessage = `HTTP error! status: ${response.status}`;
+            try {
+              const errorData = JSON.parse(errorText);
+              errorMessage = errorData.message || errorMessage;
+            } catch {
+              // If response is not JSON, use the default error message
+            }
+            throw new Error(errorMessage);
+          }
+
+          const data: ApiResponse = (await response.json()) as ApiResponse;
+
+          if (data.status === 'success') {
+            return {
+              success: true,
+              data: {
+                status: data.status,
+                message: data.message,
+              },
+            };
+          }
           throw new Error(data.message || 'Verification failed');
+        } catch (error) {
+          return {
+            success: false,
+            error:
+              error instanceof Error ? error.message : 'Unknown error occurred',
+          };
         }
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error occurred',
-        };
-      }
-    });
+      },
+    );
 
     // Resend verification handler
-    ipcMain.handle('api:resend-verification', async (event, request: { email: string }) => {
-      console.log('api:resend-verification handler called with:', request);
-      try {
-        const response = await fetch(`${this.baseUrl}/resend-verification`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: JSON.stringify(request),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          let errorMessage = `HTTP error! status: ${response.status}`;
-          try {
-            const errorData = JSON.parse(errorText);
-            errorMessage = errorData.message || errorMessage;
-          } catch {
-            // If response is not JSON, use the default error message
-          }
-          throw new Error(errorMessage);
-        }
-
-        const data: ApiResponse = await response.json() as ApiResponse;
-        
-        if (data.status === 'success') {
-          return {
-            success: true,
-            data: {
-              status: data.status,
-              message: data.message,
+    ipcMain.handle(
+      'api:resend-verification',
+      async (event, request: { email: string }) => {
+        console.log('api:resend-verification handler called with:', request);
+        try {
+          const response = await fetch(`${this.baseUrl}/resend-verification`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
             },
-          };
-        } else {
+            body: JSON.stringify(request),
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            let errorMessage = `HTTP error! status: ${response.status}`;
+            try {
+              const errorData = JSON.parse(errorText);
+              errorMessage = errorData.message || errorMessage;
+            } catch {
+              // If response is not JSON, use the default error message
+            }
+            throw new Error(errorMessage);
+          }
+
+          const data: ApiResponse = (await response.json()) as ApiResponse;
+
+          if (data.status === 'success') {
+            return {
+              success: true,
+              data: {
+                status: data.status,
+                message: data.message,
+              },
+            };
+          }
           throw new Error(data.message || 'Failed to resend verification code');
+        } catch (error) {
+          return {
+            success: false,
+            error:
+              error instanceof Error ? error.message : 'Unknown error occurred',
+          };
         }
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error occurred',
-        };
-      }
-    });
+      },
+    );
 
     console.log('All API IPC handlers registered successfully');
   }

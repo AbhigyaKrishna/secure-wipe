@@ -43,7 +43,7 @@ export class AdminPrivilegesUtils {
   static async checkPrivileges(
     targetPath?: string,
   ): Promise<PrivilegeCheckResult> {
-    const platform = process.platform;
+    const { platform } = process;
     const currentUser = this.getCurrentUser();
     const isRoot = this.isRunningAsRoot();
 
@@ -85,9 +85,8 @@ export class AdminPrivilegesUtils {
     try {
       if (process.platform === 'win32') {
         return process.env.USERNAME || 'unknown';
-      } else {
-        return process.env.USER || process.env.LOGNAME || 'unknown';
       }
+      return process.env.USER || process.env.LOGNAME || 'unknown';
     } catch (error) {
       return 'unknown';
     }
@@ -198,7 +197,7 @@ export class AdminPrivilegesUtils {
     options: Partial<PrivilegeEscalationOptions> = {},
   ): Promise<PrivilegeEscalationResult> {
     const mergedOptions = { ...this.defaultOptions, ...options };
-    const platform = process.platform;
+    const { platform } = process;
     const method = this.getElevationMethod(platform);
 
     if (method === 'none') {
@@ -246,7 +245,7 @@ export class AdminPrivilegesUtils {
     error?: string;
     method?: string;
   }> {
-    const platform = process.platform;
+    const { platform } = process;
     const method = this.getElevationMethod(platform);
 
     if (method === 'none') {
@@ -311,7 +310,7 @@ export class AdminPrivilegesUtils {
    * Check if the system supports GUI-based privilege prompts
    */
   static supportsGuiPrompts(): boolean {
-    const platform = process.platform;
+    const { platform } = process;
 
     switch (platform) {
       case 'darwin':

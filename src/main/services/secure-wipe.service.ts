@@ -27,9 +27,13 @@ import { AdminPrivilegesUtils } from '../utils/admin-privileges.utils';
 
 export class SecureWipeService extends EventEmitter {
   private binaryPath: string;
+
   private timeout: number;
+
   private activeProcess: ChildProcess | null = null;
+
   private timeoutHandle: NodeJS.Timeout | null = null;
+
   private jsonBuffer: string = ''; // Buffer for accumulating multi-line JSON
 
   constructor(options: SecureWipeServiceOptions = {}) {
@@ -45,7 +49,7 @@ export class SecureWipeService extends EventEmitter {
    * Supports both Windows (.exe) and Linux binaries bundled with the app
    */
   private getDefaultBinaryPath(): string {
-    const platform = process.platform;
+    const { platform } = process;
     const binaryName = this.getBinaryNameForPlatform(platform);
 
     // Priority order for bundled Electron apps:
@@ -342,7 +346,7 @@ export class SecureWipeService extends EventEmitter {
     } catch (error) {
       console.warn(
         'Failed to parse JSON event:',
-        jsonStr.substring(0, 100) + '...',
+        `${jsonStr.substring(0, 100)}...`,
         error,
       );
       return null;
@@ -407,14 +411,13 @@ export class SecureWipeService extends EventEmitter {
               onProgress,
               privilegeCheck,
             );
-          } else {
-            // For Windows, we need to use a different approach
-            return this.wipeWithWindowsElevation(
-              config,
-              onProgress,
-              privilegeCheck,
-            );
           }
+          // For Windows, we need to use a different approach
+          return this.wipeWithWindowsElevation(
+            config,
+            onProgress,
+            privilegeCheck,
+          );
         }
       }
 
@@ -946,7 +949,7 @@ export class SecureWipeService extends EventEmitter {
     isExecutable?: boolean;
     error?: string;
   }> {
-    const platform = process.platform;
+    const { platform } = process;
     try {
       const stats = await fs.promises.stat(this.binaryPath);
       const exists = stats.isFile();
@@ -1007,7 +1010,7 @@ export class SecureWipeService extends EventEmitter {
     supportedPlatforms: string[];
     binaryStatus: Awaited<ReturnType<SecureWipeService['checkBinary']>>;
   }> {
-    const platform = process.platform;
+    const { platform } = process;
     const supportedPlatforms = ['win32', 'linux']; // Add 'darwin' when macOS binary is available
     const binaryStatus = await this.checkBinary();
 

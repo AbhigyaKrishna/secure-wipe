@@ -1,9 +1,10 @@
+import React from 'react';
 import { MemoryRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import icon from '../../assets/icon.svg';
 import './App.css';
-import { SecureWipeDemo } from './components/SecureWipeDemo';
-import { LoginForm } from './components/LoginForm';
-import { VerificationForm } from './components/VerificationForm';
+import SecureWipeDemo from './components/SecureWipeDemo';
+import LoginForm from './components/LoginForm';
+import VerificationForm from './components/VerificationForm';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 function Hello() {
@@ -53,36 +54,34 @@ function Hello() {
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { 
-    isAuthenticated, 
-    needsVerification, 
-    userEmail, 
-    login, 
-    verifyCode, 
-    resendCode, 
-    isLoading, 
-    error 
+  const {
+    isAuthenticated,
+    needsVerification,
+    userEmail,
+    login,
+    verifyCode,
+    resendCode,
+    isLoading,
+    error,
   } = useAuth();
 
   if (!isAuthenticated) {
-    return <LoginForm 
-      onLogin={login}
-      isLoading={isLoading}
-      error={error}
-    />;
+    return <LoginForm onLogin={login} isLoading={isLoading} error={error} />;
   }
 
   if (needsVerification) {
-    return <VerificationForm
-      email={userEmail || ''}
-      onVerify={verifyCode}
-      onResendCode={resendCode}
-      isLoading={isLoading}
-      error={error}
-    />;
+    return (
+      <VerificationForm
+        email={userEmail || ''}
+        onVerify={verifyCode}
+        onResendCode={resendCode}
+        isLoading={isLoading}
+        error={error}
+      />
+    );
   }
 
-  return <>{children}</>;
+  return children;
 }
 
 export default function App() {
@@ -90,14 +89,21 @@ export default function App() {
     <AuthProvider>
       <Router>
         <Routes>
-          <Route path="/" element={<ProtectedRoute><Hello /></ProtectedRoute>} />
-          <Route 
-            path="/demo" 
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <Hello />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/demo"
             element={
               <ProtectedRoute>
                 <SecureWipeDemo />
               </ProtectedRoute>
-            } 
+            }
           />
         </Routes>
       </Router>

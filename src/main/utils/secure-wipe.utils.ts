@@ -159,7 +159,7 @@ export class SecureWipeUtils {
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
 
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+    return `${parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`;
   }
 
   /**
@@ -168,15 +168,15 @@ export class SecureWipeUtils {
   static formatDuration(seconds: number): string {
     if (seconds < 60) {
       return `${seconds.toFixed(1)}s`;
-    } else if (seconds < 3600) {
+    }
+    if (seconds < 3600) {
       const minutes = Math.floor(seconds / 60);
       const remainingSeconds = Math.floor(seconds % 60);
       return `${minutes}m ${remainingSeconds}s`;
-    } else {
-      const hours = Math.floor(seconds / 3600);
-      const minutes = Math.floor((seconds % 3600) / 60);
-      return `${hours}h ${minutes}m`;
     }
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return `${hours}h ${minutes}m`;
   }
 
   /**
@@ -235,10 +235,9 @@ export class SecureWipeUtils {
       // On Windows, check if running as administrator
       // This is a simplified check - in production, you might want to use a native module
       return process.getuid ? process.getuid() === 0 : false;
-    } else {
-      // On Unix-like systems, check if running as root
-      return process.getuid?.() === 0;
     }
+    // On Unix-like systems, check if running as root
+    return process.getuid?.() === 0;
   }
 
   /**
@@ -339,7 +338,7 @@ export class SecureWipeUtils {
   ): string {
     const timestamp = new Date().toISOString();
     const user = process.env.USER || process.env.USERNAME || 'unknown';
-    const pid = process.pid;
+    const { pid } = process;
 
     return `[${timestamp}] PID:${pid} USER:${user} OPERATION:${operation} TARGET:${target}${algorithm ? ` ALGORITHM:${algorithm}` : ''}${result ? ` RESULT:${result}` : ''}`;
   }

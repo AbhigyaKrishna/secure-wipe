@@ -1,4 +1,5 @@
 // Authentication service for SecureWipe Electron app
+import { AuthError } from './authError';
 
 export interface LoginResponse {
   status: string;
@@ -11,19 +12,11 @@ export interface VerificationResponse {
   message: string;
 }
 
-export class AuthError extends Error {
-  code?: string;
-
-  constructor(message: string, code?: string) {
-    super(message);
-    this.name = 'AuthError';
-    this.code = code;
-  }
-}
-
 class AuthService {
   private baseUrl = 'https://sih-bu.vercel.app/api';
+
   private token: string | null = null;
+
   private userEmail: string | null = null;
 
   constructor() {
@@ -67,13 +60,12 @@ class AuthService {
     try {
       // Use Electron's main process to make the API call (bypasses CORS)
       const result = await window.electron.api.login({ email, password });
-      
+
       if (result.success && result.data) {
         this.saveAuth(result.data.token, email);
         return result.data;
-      } else {
-        throw new Error(result.error || 'Login failed');
       }
+      throw new Error(result.error || 'Login failed');
     } catch (error) {
       if (error instanceof Error) {
         throw new AuthError(error.message);
@@ -82,7 +74,9 @@ class AuthService {
     }
   }
 
-  async verifyDigiLocker(verificationCode: string): Promise<VerificationResponse> {
+  async verifyDigiLocker(
+    verificationCode: string,
+  ): Promise<VerificationResponse> {
     if (!this.userEmail) {
       throw new AuthError('No user email found. Please login again.');
     }
@@ -93,12 +87,11 @@ class AuthService {
         email: this.userEmail,
         verificationCode,
       });
-      
+
       if (result.success && result.data) {
         return result.data;
-      } else {
-        throw new Error(result.error || 'Verification failed');
       }
+      throw new Error(result.error || 'Verification failed');
     } catch (error) {
       if (error instanceof Error) {
         throw new AuthError(error.message);
@@ -117,7 +110,7 @@ class AuthService {
       const result = await window.electron.api.resendVerification({
         email: this.userEmail,
       });
-      
+
       if (!result.success) {
         throw new Error(result.error || 'Failed to resend verification code');
       }
@@ -125,7 +118,9 @@ class AuthService {
       if (error instanceof Error) {
         throw new AuthError(error.message);
       }
-      throw new AuthError('Network error occurred while resending verification code');
+      throw new AuthError(
+        'Network error occurred while resending verification code',
+      );
     }
   }
 
@@ -150,9 +145,11 @@ class AuthService {
     // Only need verification if we have a token but haven't completed verification yet
     // We'll store verification status in localStorage
     if (!this.isAuthenticated()) return false;
-    
+
     try {
-      const verificationCompleted = localStorage.getItem('secureWipe_verification_completed');
+      const verificationCompleted = localStorage.getItem(
+        'secureWipe_verification_completed',
+      );
       return verificationCompleted !== 'true';
     } catch (error) {
       console.warn('Failed to check verification status:', error);
@@ -164,6 +161,9 @@ class AuthService {
   markVerificationCompleted(): void {
     try {
       localStorage.setItem('secureWipe_verification_completed', 'true');
+      // Update internal state to reflect verification completion
+      this.clearAuth();
+      this.loadStoredAuth();
     } catch (error) {
       console.warn('Failed to save verification status:', error);
     }
@@ -171,4 +171,3 @@ class AuthService {
 }
 
 export const authService = new AuthService();
-export { AuthError };

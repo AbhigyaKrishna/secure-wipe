@@ -9,13 +9,12 @@ interface VerificationFormProps {
   error: string | null;
 }
 
-export const VerificationForm: React.FC<VerificationFormProps> = ({ 
-  email, 
-  onVerify, 
-  onResendCode, 
-  isLoading, 
-  error 
-}) => {
+function VerificationForm({
+  onVerify,
+  onResendCode,
+  isLoading,
+  error,
+}: VerificationFormProps): React.ReactElement {
   const [verificationCode, setVerificationCode] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -25,9 +24,9 @@ export const VerificationForm: React.FC<VerificationFormProps> = ({
     }
   };
 
-  const handleResend = async () => {
-    await onResendCode();
-  };
+  // const handleResend = async () => {
+  //   await onResendCode();
+  // };
 
   return (
     <div className="auth-container fade-in">
@@ -58,7 +57,13 @@ export const VerificationForm: React.FC<VerificationFormProps> = ({
               <input
                 type="text"
                 className="verification-input"
-                style={{ width: '450px', height: '12px', minWidth: '450px', maxWidth: '100%', minHeight: '12px' }}
+                style={{
+                  width: '450px',
+                  height: '12px',
+                  minWidth: '450px',
+                  maxWidth: '100%',
+                  minHeight: '12px',
+                }}
                 value={verificationCode}
                 onChange={(e) => setVerificationCode(e.target.value)}
                 placeholder="Enter your verification code"
@@ -67,7 +72,9 @@ export const VerificationForm: React.FC<VerificationFormProps> = ({
               />
               <div className="verification-hint">
                 <span className="hint-icon">🔐</span>
-                <span className="hint-text">Enter the code  you got from the aadhar verificaiton</span>
+                <span className="hint-text">
+                  Enter the code you got from the aadhar verificaiton
+                </span>
               </div>
             </div>
           </div>
@@ -79,7 +86,7 @@ export const VerificationForm: React.FC<VerificationFormProps> = ({
           >
             {isLoading ? (
               <>
-                <span className="loading-spinner"></span>
+                <span className="loading-spinner" />
                 <span>Verifying...</span>
               </>
             ) : (
@@ -92,12 +99,12 @@ export const VerificationForm: React.FC<VerificationFormProps> = ({
         </form>
 
         <div className="auth-footer">
-          <div className="footer-divider"></div>
+          <div className="footer-divider" />
           <p className="footer-text">
             Need help? Contact{' '}
-            <a 
-              href="https://sih-bu.vercel.app/" 
-              target="_blank" 
+            <a
+              href="https://sih-bu.vercel.app/"
+              target="_blank"
               rel="noopener noreferrer"
               className="footer-link"
             >
@@ -108,4 +115,6 @@ export const VerificationForm: React.FC<VerificationFormProps> = ({
       </div>
     </div>
   );
-};
+}
+
+export default VerificationForm;

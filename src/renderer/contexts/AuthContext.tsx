@@ -1,5 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { authService, AuthError } from '../services/authService';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+  useMemo,
+} from 'react';
+import { authService } from '../services/authService';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -20,7 +27,7 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+function AuthProvider({ children }: AuthProviderProps): React.ReactElement {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -32,7 +39,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const checkAuthStatus = () => {
       const authenticated = authService.isAuthenticated();
       const email = authService.getUserEmail();
-      
+
       if (authenticated) {
         // User is authenticated, check if they need verification
         setIsAuthenticated(true);
@@ -65,7 +72,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Clear any previous verification status since this is a new login
       localStorage.removeItem('secureWipe_verification_completed');
     } catch (err) {
-      const errorMessage = (err as any)?.message || 'Login failed. Please try again.';
+      const errorMessage =
+        (err as any)?.message || 'Login failed. Please try again.';
       setError(errorMessage);
       setIsAuthenticated(false);
       setNeedsVerification(false);
@@ -86,7 +94,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setNeedsVerification(false);
       // Keep authenticated state and user email
     } catch (err) {
-      const errorMessage = (err as any)?.message || 'Verification failed. Please try again.';
+      const errorMessage =
+        (err as any)?.message || 'Verification failed. Please try again.';
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -101,7 +110,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await authService.resendVerificationCode();
       // Optionally show a success message
     } catch (err) {
-      const errorMessage = (err as any)?.message || 'Failed to resend code. Please try again.';
+      const errorMessage =
+        (err as any)?.message || 'Failed to resend code. Please try again.';
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -116,25 +126,39 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setError(null);
   };
 
-  const contextValue: AuthContextType = {
-    isAuthenticated,
-    needsVerification,
-    userEmail,
-    isLoading,
-    error,
-    login,
-    verifyCode,
-    resendCode,
-    logout,
-    clearError,
-  };
+  const contextValue: AuthContextType = useMemo(
+    () => ({
+      isAuthenticated,
+      needsVerification,
+      userEmail,
+      isLoading,
+      error,
+      login,
+      verifyCode,
+      resendCode,
+      logout,
+      clearError,
+    }),
+    [
+      isAuthenticated,
+      needsVerification,
+      userEmail,
+      isLoading,
+      error,
+      login,
+      verifyCode,
+      resendCode,
+      logout,
+      clearError,
+    ],
+  );
 
   return (
-    <AuthContext.Provider value={contextValue}>
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>
   );
-};
+}
+
+export { AuthProvider };
 
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
